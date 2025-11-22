@@ -2,6 +2,7 @@ package main
 
 import (
 	"avito-test-assignment-backend/internal/config"
+	"avito-test-assignment-backend/internal/http-server/handlers/pr/create"
 	"avito-test-assignment-backend/internal/http-server/handlers/teams/add"
 	"avito-test-assignment-backend/internal/http-server/handlers/teams/get"
 	"avito-test-assignment-backend/internal/http-server/handlers/users/set"
@@ -54,6 +55,7 @@ func main() {
 	router.Post("/team/add", add.New(log, service))
 	router.Get("/team/get/{team_name}", get.New(log, service))
 	router.Get("/users/setIsActive", set.New(log, service))
+	router.Post("/pullRequest/create",  create.New(log, service))
 
 	log.Info("Starting HTTP server", slog.String("addr", cfg.Address))
 

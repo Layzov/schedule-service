@@ -1,14 +1,16 @@
 package postgres
 
 import (
+	"avito-test-assignment-backend/api"
 	"avito-test-assignment-backend/internal/models"
 	"avito-test-assignment-backend/pkg/response"
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"strings"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 type Storage struct {
@@ -44,35 +46,17 @@ func (s *Storage) InsertTeamTx(ctx context.Context, tx *sql.Tx, teamName string)
 	n, err := res.RowsAffected()
 
 	if err != nil {
-		return 0, fmt.Errorf("%s rows affected: %w", op, err)
+		return 0, fmt.Errorf("%s %w", op, err)
 	}
 
 	return n, nil
 }
 
-func (s *Storage) UpsertUsersTx(ctx context.Context, tx *sql.Tx, teamName string, users []models.User) error {
+func (s *Storage) UpsertUsersTx(ctx context.Context, tx *sql.Tx, teamName string, users []any, placeholders []string) error {
 	const op = "storage.postgres.UpsertUsersTx"
 
 	if len(users) == 0 {
 		return nil
-	}
-
-	placeholders := make([]string, 0, len(users))
-	args := make([]interface{}, 0, len(users)*4)
-	idx := 1
-
-	for i := range users {
-		placeholders = append(
-			placeholders, 
-			fmt.Sprintf("($%d,$%d,$%d,$%d)", 
-			idx, idx+1, idx+2, idx+3))
-		args = append(
-			args, 
-			users[i].UserID, 
-			users[i].Username, 
-			teamName, 
-			users[i].IsActive)
-		idx += 4
 	}
 
 	query := fmt.Sprintf(`
@@ -87,11 +71,10 @@ func (s *Storage) UpsertUsersTx(ctx context.Context, tx *sql.Tx, teamName string
 		strings.Join(placeholders, ","),
 	)
 
-	_, err := tx.ExecContext(ctx, query, args...)
+	_, err := tx.ExecContext(ctx, query, users...)
 	if err != nil {
 		return fmt.Errorf("%s exec: %w", op, err)
 	}
-
 
 	return nil
 }
@@ -107,7 +90,7 @@ func (s *Storage) GetTeam(ctx context.Context, teamName string) (*models.Team, e
 	err := s.db.QueryRowContext(ctx, `SELECT team_name FROM teams WHERE team_name=$1`, teamName).Scan(&team.TeamName)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, response.ErrNotFound
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
 		}
 
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -133,6 +116,8 @@ func (s *Storage) GetTeam(ctx context.Context, teamName string) (*models.Team, e
 	
 	return &team, nil
 }
+
+// #### user/set_is_active ####
 
 func (s *Storage) SetIsActive(ctx context.Context, userID string, isActive bool) (*models.User, error) {
 	const op = "storage.postgres.SetIsActive"
@@ -173,4 +158,106 @@ func (s *Storage) SetIsActive(ctx context.Context, userID string, isActive bool)
 
 	return &user, nil
 
+}
+
+func (s *Storage) PullRequestCreate(ctx context.Context, tx *sql.Tx, pr *api.PRCreateRequest) error {
+	const op = "storage.postgres.PullRequestCreate"
+
+	_, err := tx.ExecContext(ctx,
+		`INSERT INTO pull_requests 
+		(pull_request_id, pull_request_name, author_id, pr_status) 
+		VALUES ($1, $2, $3, $4)`,
+		pr.PullRequestID,
+		pr.PullRequestName,
+		pr.AuthorID,
+		string(models.PR_OPEN),
+	)
+	if err != nil {
+		sqlErr, ok := err.(*pq.Error)
+		if ok && sqlErr.Code == "23505" { 
+			return fmt.Errorf("%s: %w", op, response.ErrPRExists)
+		}
+		if ok && sqlErr.Code == "23503" {
+			return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) AddPRReviewers(ctx context.Context, tx *sql.Tx, prID string, authorID string) ([]string, error) {
+	const op = "storage.postgres.AddPRReviewers"
+
+	var teamName string
+	var userID string
+	var members []string
+
+	err := tx.QueryRowContext(ctx, `SELECT team_name FROM users WHERE user_id=$1`, authorID).Scan(&teamName)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	rows, err := tx.QueryContext(ctx, `SELECT user_id FROM users WHERE team_name=$1`, teamName)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	
+	defer rows.Close()
+
+	for rows.Next() {
+		err := rows.Scan(&userID)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		if userID != authorID {
+			members = append(members, userID)
+		}
+		
+	}
+
+	switch {
+	case len(members) == 0:
+		return nil, nil
+	case len(members) == 1:
+		
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO pr_reviewers
+			(pull_request_id, reviewer_id) 
+			VALUES ($1, $2) 
+			ON CONFLICT DO NOTHING`,
+			prID,
+			members[0],
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		return members, nil
+	default:
+		i := rand.Intn(len(members))
+		j := rand.Intn(len(members) - 1)
+		if j == i {
+			j++
+		}
+
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO pr_reviewers
+			(pull_request_id, reviewer_id) 
+			VALUES 
+			($1, $2),
+			($1, $3)
+			ON CONFLICT DO NOTHING`,
+			prID,
+			members[i],
+			members[j],
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		return []string{members[i], members[j]}, nil
+	}
 }

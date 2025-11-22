@@ -29,7 +29,7 @@ type Response struct {
 
 func New(log *slog.Logger, userSetter UserSetter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const op = "handlers.teams.add.add.New"
+		const op = "handlers.teams.set.set.New"
 		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),

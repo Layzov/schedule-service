@@ -24,6 +24,7 @@ var (
 	BAD_REQUEST ErrCode = "FAILED_TO_DECODE"
 	TEAM_EXISTS ErrCode = "TEAM_EXISTS"
 	NOT_FOUND ErrCode = "NOT_FOUND"
+	PR_EXISTS ErrCode = "PR_EXISTS"
 )
 
 var (
@@ -31,6 +32,7 @@ var (
 	ErrInvalidId = errors.New("invalid user_id")
 	ErrTeamExists = errors.New("team_name already exists")
 	ErrNotFound = errors.New("resource not found")
+	ErrPRExists = errors.New("PR id already exists")
 )
 
 func Error(code, msg string) Response {

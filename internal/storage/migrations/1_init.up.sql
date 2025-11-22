@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY UNIQUE NOT NULL,
     username TEXT NOT NULL,
     team_name TEXT,
-    FOREIGN KEY (team_name) REFERENCES teams(team_name) ON DELETE SET NULL,
+    FOREIGN KEY (team_name) REFERENCES teams(team_name) ON DELETE RESTRICT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -28,7 +28,3 @@ CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
-
-
-
