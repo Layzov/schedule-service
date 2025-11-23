@@ -1,4 +1,4 @@
-package create
+package merge
 
 import (
 	"avito-test-assignment-backend/api"
@@ -8,16 +8,17 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 )
 
-type PRCreator interface {
-	CreatePullRequestService(ctx context.Context, pr *api.PRCreateRequest) (*api.PullRequest, error)
+type PRMerger interface {
+	MergePRService(ctx context.Context, prID string) (*api.PullRequest, error)
 }
 
 type Request struct {
-	api.PRCreateRequest
+	PrID string `json:"pull_request_id"`
 }
 
 type Response struct {
@@ -25,9 +26,9 @@ type Response struct {
 	PR api.PullRequest `json:"pr,omitempty"`
 }
 
-func New(log *slog.Logger, prCreator PRCreator) http.HandlerFunc {
+func New(log *slog.Logger, prMerger PRMerger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const op = "handlers.pr.create.create.New"
+		const op = "handlers.pr.merge.merge.New"
 
 		log = log.With(
 			slog.String("op", op),
@@ -45,32 +46,16 @@ func New(log *slog.Logger, prCreator PRCreator) http.HandlerFunc {
 		}
 
 		log.Info("Request body decoded", slog.Any("request", req))
-
-		if req.PullRequestID == ""{
+		
+		if req.PrID == ""{
 			log.Error("PR id is empty")
 			w.WriteHeader(http.StatusBadRequest)
 			render.JSON(w, r, response.Error(string(response.BAD_REQUEST),"PR id is empty"))
 
 			return
 		}
-		if req.AuthorID == ""{
-			log.Error("author_id is empty")
-			w.WriteHeader(http.StatusBadRequest)
-			render.JSON(w, r, response.Error(string(response.BAD_REQUEST),"author_id is empty"))
 
-			return
-		}
-
-		pr, err := prCreator.CreatePullRequestService(r.Context(), &req.PRCreateRequest)
-
-
-		if errors.Is(err, response.ErrPRExists) {
-			log.Error("PR id already exists", sl.Err(err))
-			w.WriteHeader(http.StatusConflict)
-			render.JSON(w, r, response.Error(string(response.PR_EXISTS),"PR id already exists"))
-
-			return
-		}
+		pr, err := prMerger.MergePRService(r.Context(), req.PrID)
 		if errors.Is(err, response.ErrNotFound) {
 			log.Error("resource not found")
 			w.WriteHeader(http.StatusNotFound)
@@ -80,16 +65,15 @@ func New(log *slog.Logger, prCreator PRCreator) http.HandlerFunc {
 		}
 
 		if err != nil {
-			log.Error("Failed to create PR", sl.Err(err))
+			log.Error("Failed to merge PR", sl.Err(err))
 			w.WriteHeader(http.StatusInternalServerError)
-			render.JSON(w, r, response.Error(string(response.FAILED_REQUEST),"failed to create PR"))
+			render.JSON(w, r, response.Error(string(response.FAILED_REQUEST),"failed to merge PR"))
 
 			return
 		}
 
-		log.Info("PR was created ", slog.Any("pr", pr))
+		log.Info("PR was merged ", slog.Any("pr", pr))
 
-		w.WriteHeader(http.StatusCreated)
 		responseOK(w, r, pr)
 	}
 }

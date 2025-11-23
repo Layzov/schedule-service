@@ -1,20 +1,19 @@
 package set
 
 import (
-	"avito-test-assignment-backend/internal/models"
+	"avito-test-assignment-backend/api"
 	"avito-test-assignment-backend/pkg/response"
 	"avito-test-assignment-backend/pkg/sl"
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
-
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 )
 
 type UserSetter interface {
-	SetIsActiveService(ctx context.Context, userID string, isActive bool) (*models.User, error)
+	SetIsActiveService(ctx context.Context, userID string, isActive bool) (*api.UserDto, error)
 }
 
 type Request struct {
@@ -24,7 +23,7 @@ type Request struct {
 
 type Response struct {
 	response.Response
-	models.User `json:"user,omitempty"`
+	User api.UserDto `json:"user,omitempty"`
 }
 
 func New(log *slog.Logger, userSetter UserSetter) http.HandlerFunc {
@@ -79,7 +78,7 @@ func New(log *slog.Logger, userSetter UserSetter) http.HandlerFunc {
 	}
 }
 
-func responseOK(w http.ResponseWriter, r *http.Request, user *models.User) {
+func responseOK(w http.ResponseWriter, r *http.Request, user *api.UserDto) {
 	render.JSON(w, r, Response{
 		User: *user,
 	})

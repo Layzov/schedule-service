@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -28,6 +29,13 @@ func New(storagePath string) (*Storage, error) {
     return &Storage{db: db}, nil
 }
 
+func (s *Storage) Close() error {
+	if s.db == nil || s == nil {
+		return nil
+	}
+
+	return s.db.Close()
+}
 
 // #### team/add ####
 
@@ -150,11 +158,11 @@ func (s *Storage) SetIsActive(ctx context.Context, userID string, isActive bool)
 		&user.IsActive,
 	)
 
-	user.UserID = userID
-
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+
+	user.UserID = userID
 
 	return &user, nil
 
@@ -193,29 +201,30 @@ func (s *Storage) AddPRReviewers(ctx context.Context, tx *sql.Tx, prID string, a
 	var teamName string
 	var userID string
 	var members []string
+	var isActive bool
 
 	err := tx.QueryRowContext(ctx, `SELECT team_name FROM users WHERE user_id=$1`, authorID).Scan(&teamName)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	rows, err := tx.QueryContext(ctx, `SELECT user_id FROM users WHERE team_name=$1`, teamName)
+	rows, err := tx.QueryContext(ctx, `SELECT user_id, is_active FROM users WHERE team_name=$1`, teamName)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	
 	defer rows.Close()
 
 	for rows.Next() {
-		err := rows.Scan(&userID)
+		err := rows.Scan(&userID, &isActive)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
 		if userID != authorID {
-			members = append(members, userID)
+			if isActive{
+				members = append(members, userID)
+			}
 		}
-		
 	}
 
 	switch {
@@ -260,4 +269,216 @@ func (s *Storage) AddPRReviewers(ctx context.Context, tx *sql.Tx, prID string, a
 
 		return []string{members[i], members[j]}, nil
 	}
+}
+
+func (s *Storage) MergePullRequest(ctx context.Context, prID string) (*models.PullRequestShort, *time.Time, []string, error) {
+	const op = "storage.postgres.MergePullRequest"
+
+	var pr models.PullRequestShort
+	var mergedAt time.Time
+	var reviewer string
+	var reviewers []string
+
+
+	err := s.db.QueryRowContext(ctx, `SELECT pr_status FROM pull_requests WHERE pull_request_id=$1`, prID).Scan(&pr.Status)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+
+		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if pr.Status != models.PR_MERGED {
+		_, err := s.db.ExecContext(ctx, `UPDATE pull_requests SET pr_status=$1 
+		WHERE pull_request_id=$2`, string(models.PR_MERGED), prID)
+
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+	}
+
+	prErr := s.db.QueryRowContext(ctx, `SELECT pull_request_name, author_id, pr_status, merged_at 
+	FROM pull_requests WHERE pull_request_id=$1`, prID).
+	Scan(
+		&pr.PullRequestName,
+		&pr.AuthorID,
+		&pr.Status,
+		&mergedAt,
+	)
+
+	if prErr != nil {
+		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	pr.PullRequestID = prID
+
+	rows, revErr := s.db.QueryContext(ctx, `SELECT reviewer_id FROM pr_reviewers WHERE pull_request_id=$1`, prID)
+	if revErr != nil {
+		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		err := rows.Scan(&reviewer)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		reviewers = append(reviewers, reviewer)
+	}
+
+	return &pr, &mergedAt, reviewers, nil
+}
+
+func (s *Storage) ReassignPRReviewers(ctx context.Context, prID string, oldReviewerID string) (*models.PullRequestShort, []string, error) {
+	const op = "storage.postgres.ReassignPRReviewers"
+
+	var pr models.PullRequestShort
+	var revID string
+	var oldReviewerID2 string
+	var reviewers []string
+
+	err := s.db.QueryRowContext(ctx, `SELECT pull_request_name, author_id, pr_status 
+	FROM pull_requests WHERE pull_request_id=$1`, prID).
+		Scan(
+			&pr.PullRequestName,
+			&pr.AuthorID,
+			&pr.Status,
+		)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+	if pr.Status == models.PR_MERGED {
+		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrPRMerged)
+	}
+
+	pr.PullRequestID = prID
+
+	rows, err := s.db.QueryContext(ctx, `SELECT reviewer_id FROM pr_reviewers WHERE pull_request_id=$1`, prID)
+	if err != nil{
+		if err == sql.ErrNoRows{
+			return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
+		}
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		err := rows.Scan(&revID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		reviewers = append(reviewers, revID)
+	}
+
+	switch {
+	case len(reviewers) == 1 && reviewers[0] == oldReviewerID :
+		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
+	case len(reviewers) == 1 && reviewers[0] != oldReviewerID:
+		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotAssigned)
+	case len(reviewers) == 2 && (reviewers[0] != oldReviewerID && reviewers[1] != oldReviewerID):
+		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotAssigned)
+	default:
+		for _, reviewer := range reviewers{
+			if reviewer != oldReviewerID{
+				oldReviewerID2 = reviewer
+				break
+			}
+		}
+	}
+
+	var teamName string
+	err = s.db.QueryRowContext(ctx, `SELECT team_name FROM users WHERE user_id=$1`, pr.AuthorID).Scan(&teamName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	var newReviewerID string
+	err = s.db.QueryRowContext(ctx, `
+		SELECT user_id FROM users
+		WHERE team_name=$1 
+		AND is_active=TRUE 
+		AND user_id != $2 
+		AND user_id != $3
+		ORDER BY random()
+		LIMIT 1`, teamName, 
+		pr.AuthorID, 
+		oldReviewerID).
+		Scan(&newReviewerID)
+	
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &pr, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
+		}
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `UPDATE pr_reviewers SET reviewer_id=$1 WHERE pull_request_id=$2 AND reviewer_id=$3`, newReviewerID, prID, oldReviewerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return &pr, []string{newReviewerID, oldReviewerID2}, nil
+}
+
+func (s *Storage) GetReview(ctx context.Context, userID string) (*[]models.PullRequestShort, error){
+	const op = "storage.postgres.GetReview"
+
+	var prID string
+	var pullRequests []models.PullRequestShort
+	var pr models.PullRequestShort
+
+	err := s.db.QueryRowContext(ctx, `SELECT user_id FROM users WHERE user_id=$1`, userID).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, `SELECT pull_request_id FROM pr_reviewers WHERE reviewer_id=$1`, userID)
+	if err != nil {
+		if err == sql.ErrNoRows{
+			return &pullRequests, nil
+		}
+
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		err := rows.Scan(&prID)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		
+		prErr := s.db.QueryRowContext(ctx, 
+			`SELECT pull_request_name, 
+			author_id, pr_status 
+			FROM pull_requests 
+			WHERE pull_request_id=$1`, prID).
+			Scan(
+				&pr.PullRequestName,
+				&pr.AuthorID,
+				&pr.Status,
+			)
+		if prErr != nil{
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+
+		pr.PullRequestID = prID
+
+		pullRequests = append(pullRequests, pr)
+	}
+
+	return &pullRequests, nil
 }

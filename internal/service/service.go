@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type Service struct {
@@ -20,12 +21,18 @@ func NewService(store Store) *Service {
 
 type Store interface {
 	BeginTx(ctx context.Context) (*sql.Tx, error)
+
 	InsertTeamTx(ctx context.Context, tx *sql.Tx, teamName string) (int64, error)
 	UpsertUsersTx(ctx context.Context, tx *sql.Tx, teamName string, users []any, placeholders []string) error
     GetTeam(ctx context.Context, teamName string) (*models.Team, error)
+
     SetIsActive(ctx context.Context, userID string, isActive bool) (*models.User, error)
+    GetReview(ctx context.Context, userID string) (*[]models.PullRequestShort, error)
+
     PullRequestCreate(ctx context.Context, tx *sql.Tx, pr *api.PRCreateRequest) error
     AddPRReviewers(ctx context.Context, tx *sql.Tx, prID string, authorID string) ([]string, error)
+    MergePullRequest(ctx context.Context, prID string) (*models.PullRequestShort, *time.Time, []string, error)
+    ReassignPRReviewers(ctx context.Context, prID string, oldReviewerID string) (*models.PullRequestShort, []string, error)
 }
 
 func (s *Service) AddTeamService(ctx context.Context, t models.Team) error {
@@ -112,7 +119,7 @@ func (s *Service) GetTeamService(ctx context.Context, teamName string) (*api.Tea
     return &dtoTeam, nil
 }
 
-func (s *Service) SetIsActiveService(ctx context.Context, userID string, isActive bool) (*models.User, error) {
+func (s *Service) SetIsActiveService(ctx context.Context, userID string, isActive bool) (*api.UserDto, error) {
     const op = "service.SetIsActiveService"
 
     user, err := s.store.SetIsActive(ctx, userID, isActive)
@@ -125,7 +132,14 @@ func (s *Service) SetIsActiveService(ctx context.Context, userID string, isActiv
         return nil, fmt.Errorf("%s: %w", op, err)
     }
 
-    return user, nil
+    userDto := &api.UserDto{
+        UserID: user.UserID,
+        Username: user.Username,
+        TeamName: user.TeamName,
+        IsActive: user.IsActive,
+    }
+
+    return userDto, nil
 }
 
 func (s *Service) CreatePullRequestService(ctx context.Context, pr *api.PRCreateRequest) (*api.PullRequest, error) {
@@ -142,8 +156,6 @@ func (s *Service) CreatePullRequestService(ctx context.Context, pr *api.PRCreate
             panic(p)
 		}
 	}()
-
-    fmt.Println(pr)
 
     prErr := s.store.PullRequestCreate(ctx, tx, pr)
     if prErr != nil {
@@ -170,7 +182,6 @@ func (s *Service) CreatePullRequestService(ctx context.Context, pr *api.PRCreate
         return nil, fmt.Errorf("%s: %w", op, err)
     }
 
-    
     dtoPR := &api.PullRequest{
         PullRequestID:   pr.PullRequestID,
         PullRequestName: pr.PullRequestName,
@@ -179,7 +190,96 @@ func (s *Service) CreatePullRequestService(ctx context.Context, pr *api.PRCreate
         Reviewers:       reviewers,
     }
 
-    fmt.Println(dtoPR)
+    return dtoPR, nil
+}
+
+func (s *Service) MergePRService(ctx context.Context, prID string) (*api.PullRequest, error){
+    const op = "service.MergePRService"
+
+    pr, mergedAt, reviewers, err := s.store.MergePullRequest(ctx, prID)
+
+    if err != nil {
+        if errors.Is(err, response.ErrNotFound) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+        }
+
+        return nil, fmt.Errorf("%s: %w", op, err)
+    }
+
+    dtoPR := &api.PullRequest{
+        PullRequestID: prID,
+        PullRequestName: pr.PullRequestName,
+        AuthorID: pr.AuthorID,
+        Status: string(pr.Status),
+        Reviewers: reviewers,
+        MergedAt: mergedAt,
+    }
 
     return dtoPR, nil
+}
+
+func (s *Service) ReassignPRReviewersService(ctx context.Context, prID string, oldReviewerID string) (*api.PullRequest, error){
+    const op = "service.ReassignPRReviewersService"
+
+    pr, reviewers, err := s.store.ReassignPRReviewers(ctx, prID, oldReviewerID)
+
+    if err != nil {
+        if errors.Is(err, response.ErrNotFound) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+        }
+        if errors.Is(err, response.ErrPRMerged) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrPRMerged)
+        }
+        if errors.Is(err, response.ErrNoCandidate) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
+        }
+        if errors.Is(err, response.ErrNotAssigned) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrNotAssigned)
+        }
+
+        return nil, fmt.Errorf("%s: %w", op, err)
+    }
+
+    dtoPR := &api.PullRequest{
+        PullRequestID: pr.PullRequestID,
+        PullRequestName: pr.PullRequestName,
+        AuthorID: pr.AuthorID,
+        Status: string(pr.Status),
+        Reviewers: reviewers,
+    }
+
+    return dtoPR, nil
+}
+
+func (s *Service) GetReviewService(ctx context.Context, userID string) (*[]api.PullRequestShortDto, error){
+    const op = "service.GetReviewService"
+    
+    var prDto api.PullRequestShortDto
+    var reviewsDto []api.PullRequestShortDto
+
+    reviews, err := s.store.GetReview(ctx, userID)
+    if err != nil {
+        if errors.Is(err, response.ErrNotFound) {
+            return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+        }
+
+        return nil, fmt.Errorf("%s: %w", op, err)
+    }
+
+    if len(*reviews) == 0{
+        return &reviewsDto, nil
+    }
+
+    for _, pr := range *reviews{
+        prDto = api.PullRequestShortDto{
+            PullRequestID: pr.PullRequestID,
+            PullRequestName: pr.PullRequestName,
+            AuthorID: pr.AuthorID,
+            Status: string(pr.Status),
+        }
+
+        reviewsDto = append(reviewsDto, prDto)
+    }
+
+    return &reviewsDto, nil
 }

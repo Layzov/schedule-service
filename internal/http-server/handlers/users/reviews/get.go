@@ -1,4 +1,4 @@
-package get
+package reviews
 
 import (
 	"avito-test-assignment-backend/api"
@@ -8,20 +8,22 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 )
 
-type TeamGetter interface {
-	GetTeamService(ctx context.Context, teamName string) (*api.Team, error)
+type ReviewGetter interface {
+	GetReviewService(ctx context.Context, userID string) (*[]api.PullRequestShortDto, error)
 }
 
 type Response struct {
 	response.Response
-	api.Team `json:"team,omitempty"`
+	UserID string `json:"user_id,omitempty"`
+	UserReviews []api.PullRequestShortDto `json:"pull_requests"`
 }
 
-func New(log *slog.Logger,teamGetter TeamGetter) http.HandlerFunc {
+func New(log *slog.Logger,reviewGetter ReviewGetter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.teams.get.get.New"
 		log = log.With(
@@ -29,14 +31,14 @@ func New(log *slog.Logger,teamGetter TeamGetter) http.HandlerFunc {
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
 
-		teamName := r.URL.Query().Get("team_name")
-		if teamName == ""{
+		userID := r.URL.Query().Get("user_id")
+		if userID == ""{
 			log.Error("Request body is empty")
 			w.WriteHeader(http.StatusBadRequest)
 			render.JSON(w, r, response.Error(string(response.BAD_REQUEST),"request body is empty"))
 		}
 
-		team, err :=  teamGetter.GetTeamService(r.Context(), teamName)
+		reviews, err :=  reviewGetter.GetReviewService(r.Context(), userID)
 
 		if errors.Is(err, response.ErrNotFound) {
 			log.Error("team_name not found")
@@ -45,23 +47,23 @@ func New(log *slog.Logger,teamGetter TeamGetter) http.HandlerFunc {
 
 			return
 		}
-
 		if err != nil {
-			log.Error("Failed to get team", sl.Err(err))
+			log.Error("Failed to get reviews", sl.Err(err))
 			w.WriteHeader(http.StatusInternalServerError)
-			render.JSON(w, r, response.Error(string(response.FAILED_REQUEST),"failed to get team"))
+			render.JSON(w, r, response.Error(string(response.FAILED_REQUEST),"failed to get reviews"))
 
 			return
 		}
 
-		log.Info("Team was received ", slog.Any("team", team))
+		log.Info("Reviews were received ", slog.Any("reviews", reviews))
 
-		responseOK(w, r, team)
+		responseOK(w, r, userID, reviews)
 	}
 }
 
-func responseOK(w http.ResponseWriter, r *http.Request, team *api.Team) {
+func responseOK(w http.ResponseWriter, r *http.Request, userID string, reviews *[]api.PullRequestShortDto) {
 	render.JSON(w, r, Response{
-		Team: *team,
+		UserID: userID,
+		UserReviews: *reviews,
 	})
 }

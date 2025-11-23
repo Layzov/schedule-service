@@ -17,6 +17,22 @@ CREATE TRIGGER update_pr_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE OR REPLACE FUNCTION set_merged_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.pr_status = 'MERGED' AND OLD.pr_status <> 'MERGED' THEN
+        NEW.merged_at := NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_merged_at
+BEFORE UPDATE OF pr_status ON pull_requests
+FOR EACH ROW
+EXECUTE FUNCTION set_merged_at();
+
+
 CREATE TABLE IF NOT EXISTS pr_reviewers (
     pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
     reviewer_id TEXT DEFAULT NULL REFERENCES users(user_id) ON DELETE RESTRICT,

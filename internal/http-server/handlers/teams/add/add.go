@@ -27,7 +27,7 @@ type Request struct {
 
 type Response struct {
 	response.Response
-	api.Team `json:"team,omitempty"`
+	api.Team `json:"team"`
 }
 
 func New(log *slog.Logger, teamAdder TeamAdder) http.HandlerFunc {
@@ -87,8 +87,10 @@ func New(log *slog.Logger, teamAdder TeamAdder) http.HandlerFunc {
 		}
 
 		log.Info("Team added", slog.Any("team", req.Team))
-		
-		responseOK(w, r, &req.Team)
+	
+		team := req.Team
+		w.WriteHeader(http.StatusCreated)	
+		responseOK(w, r, &team)
 	}	
 
 }

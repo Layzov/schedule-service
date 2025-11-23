@@ -25,6 +25,9 @@ var (
 	TEAM_EXISTS ErrCode = "TEAM_EXISTS"
 	NOT_FOUND ErrCode = "NOT_FOUND"
 	PR_EXISTS ErrCode = "PR_EXISTS"
+	NO_CANDIDATE ErrCode = "NO_CANDIDATE"
+	NOT_ASSIGNED ErrCode = "NOT_ASSIGNED"
+	PR_MERGED ErrCode = "PR_MERGED"
 )
 
 var (
@@ -33,6 +36,9 @@ var (
 	ErrTeamExists = errors.New("team_name already exists")
 	ErrNotFound = errors.New("resource not found")
 	ErrPRExists = errors.New("PR id already exists")
+	ErrNoCandidate = errors.New("no active replacement candidate in team")
+	ErrNotAssigned = errors.New("reviewer is not assigned to this PR")
+	ErrPRMerged = errors.New("cannot reassign on merged PR")
 )
 
 func Error(code, msg string) Response {
