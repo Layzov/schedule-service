@@ -1,10 +1,10 @@
-# Makefile for avito-test-assignment-backend
+# Makefile for rasp-service-backend
 # Useful targets: build, run, test, fmt, vet, lint, docker, compose
 
 # Configuration
 GO ?= go
 PKG := ./cmd/app
-BINARY := avito-test-app
+BINARY := rasp-service
 OUT_DIR := bin
 
 # On Windows produce .exe and make OUT include it so build/run match
@@ -65,24 +65,6 @@ else
 	@$(OUT)
 endif
 
-# test:
-# 	$(GO) test ./... -v
-
-# lint:
-# ifeq ($(OS),Windows_NT)
-# 	@if powershell -NoProfile -Command "if (Get-Command golangci-lint -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"; then \
-# 		powershell -NoProfile -Command "golangci-lint run"; \
-# 	else \
-# 		echo "golangci-lint not installed. Run 'make install-tools' to install it."; exit 0; \
-# 	fi
-# else
-# 	@if command -v golangci-lint >/dev/null 2>&1; then \
-# 		golangci-lint run; \
-# 	else \
-# 		echo "golangci-lint not installed. Run 'make install-tools' to install it."; exit 0; \
-# 	fi
-# endif
-
 modtidy:
 	$(GO) mod tidy
 
@@ -115,12 +97,11 @@ install-tools:
 migrate-all:
 	@echo "Starting postgres service..."
 	docker-compose up -d --build
-	@echo "Waiting for Postgres to become available (container: avito-test-assignment-postgres)..."
+	@echo "Waiting for Postgres to become available (container: rasp-service-postgres)..."
 ifeq ($(OS),Windows_NT)
-	@powershell -NoProfile -Command "& { $$i=0; while ($$i -lt 60) { docker exec avito-test-assignment-postgres pg_isready -U admin -d avito_db -p 5432 > $$null 2>$$null; if ($$LASTEXITCODE -eq 0) { break } ; Start-Sleep -Seconds 1; $$i++; Write-Host \"waiting... ($$i)\" } ; if ($$i -ge 60) { Write-Error 'Postgres did not become ready in time'; exit 1 } }"
+	@powershell -NoProfile -Command "& { $$i=0; while ($$i -lt 60) { docker exec rasp-service-postgres pg_isready -U admin -d rasp_db -p 5432 > $$null 2>$$null; if ($$LASTEXITCODE -eq 0) { break } ; Start-Sleep -Seconds 1; $$i++; Write-Host \"waiting... ($$i)\" } ; if ($$i -ge 60) { Write-Error 'Postgres did not become ready in time'; exit 1 } }"
 	@echo "Applying migrations..."
-	@powershell -NoProfile -Command "& { Get-Content -Raw 'internal/storage/migrations/1_init.up.sql' | docker exec -i avito-test-assignment-postgres psql -U admin -d avito_db -f - }"
-	@powershell -NoProfile -Command "& { Get-Content -Raw 'internal/storage/migrations/2_pr.up.sql' | docker exec -i avito-test-assignment-postgres psql -U admin -d avito_db -f - }"
+	@powershell -NoProfile -Command "& { Get-Content -Raw 'internal/storage/migrations/1_init.up.sql' | docker exec -i rasp-service-postgres psql -U admin -d rasp_db -f - }"
 	@echo "Migrations applied."
 
 
@@ -130,11 +111,10 @@ start: deps modtidy migrate-all build
 	@echo "Starting local binary after migrations"
 	@$(MAKE) run
 else
-	@i=0; until docker exec avito-test-assignment-postgres pg_isready -U admin -d avito_db -p 5432 >/dev/null 2>&1 || [ $$i -ge 60 ]; do i=$$((i+1)); sleep 1; echo "waiting... ($$i)"; done; \
+	@i=0; until docker exec rasp-service-postgres pg_isready -U admin -d rasp_db -p 5432 >/dev/null 2>&1 || [ $$i -ge 60 ]; do i=$$((i+1)); sleep 1; echo "waiting... ($$i)"; done; \
 	if [ $$i -ge 60 ]; then echo "Postgres did not become ready in time"; exit 1; fi
 	@echo "Applying migrations..."
-	@docker exec -i avito-test-assignment-postgres psql -U admin -d avito_db -f - < internal/storage/migrations/1_init.up.sql
-	@docker exec -i avito-test-assignment-postgres psql -U admin -d avito_db -f - < internal/storage/migrations/2_pr.up.sql
+	@docker exec -i rasp-service-postgres psql -U admin -d rasp_db -f - < internal/storage/migrations/1_init.up.sql
 	@echo "Migrations applied."
 endif
 

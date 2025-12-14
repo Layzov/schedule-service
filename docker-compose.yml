@@ -1,10 +1,28 @@
 services:
   postgres:
-    container_name: avito-test-assignment-postgres
-    ports:
-      - "5438:5432"
-    environment:
-      - POSTGRES_DB=avito_db
-      - POSTGRES_PASSWORD=avito_test
-      - POSTGRES_USER=admin
     image: postgres:latest
+    container_name: rasp-service-postgres
+    ports:
+      - "5439:5432"
+    environment:
+      POSTGRES_DB: rasp_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: prRB8xAy6HmwDcusUFHC
+
+  redis:
+    image: redis:7-alpine
+    container_name: resp-service-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:

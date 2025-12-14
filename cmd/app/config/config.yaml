@@ -1,5 +1,5 @@
 env: "local"
-storage_path: "postgres://admin:avito_test@localhost:5438/avito_db?sslmode=disable"
+storage_path: "postgres://admin:prRB8xAy6HmwDcusUFHC@localhost:5439/rasp_db?sslmode=disable"
 http_server:
   address: "localhost:8080"
   timeout: 5s

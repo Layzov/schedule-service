@@ -1,14 +1,11 @@
 package postgres
 
 import (
-	"avito-test-assignment-backend/api"
-	"avito-test-assignment-backend/internal/models"
-	"avito-test-assignment-backend/pkg/response"
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
-	"strings"
+	"rasp-service/internal/models"
+	"rasp-service/pkg/response"
 	"time"
 
 	"github.com/lib/pq"
@@ -21,12 +18,12 @@ type Storage struct {
 func New(storagePath string) (*Storage, error) {
 	const op = "storage.postgres.New"
 
-    db, err := sql.Open("postgres", storagePath)
-    if err != nil {
-        return nil, fmt.Errorf("%s: %w", op, err)
-    }
+	db, err := sql.Open("postgres", storagePath)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
 
-    return &Storage{db: db}, nil
+	return &Storage{db: db}, nil
 }
 
 func (s *Storage) Close() error {
@@ -37,448 +34,897 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-// #### team/add ####
-
 func (s *Storage) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return s.db.BeginTx(ctx, nil)
 }
 
-func (s *Storage) InsertTeamTx(ctx context.Context, tx *sql.Tx, teamName string) (int64, error) {
-	const op = "storage.postgres.InsertTeamTx"
+// Availability Templates
 
-	res, err := tx.ExecContext(ctx, `INSERT INTO teams (team_name) VALUES ($1) ON CONFLICT DO NOTHING`, teamName)
+func (s *Storage) CreateAvailabilityTemplate(ctx context.Context, template *models.AvailabilityTemplate) (string, error) {
+	const op = "storage.postgres.CreateAvailabilityTemplate"
+
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		`INSERT INTO availability_templates 
+		(teacher_id, recurrence_days, recurrence_start_time, recurrence_end_time, 
+		 slot_duration_minutes, start_date, end_date, enabled)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id`,
+		template.TeacherID,
+		pq.Array(template.RecurrenceDays),
+		template.RecurrenceStartTime,
+		template.RecurrenceEndTime,
+		template.SlotDurationMinutes,
+		template.StartDate,
+		template.EndDate,
+		template.Enabled,
+	).Scan(&id)
+
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	n, err := res.RowsAffected()
-
-	if err != nil {
-		return 0, fmt.Errorf("%s %w", op, err)
-	}
-
-	return n, nil
+	return id, nil
 }
 
-func (s *Storage) UpsertUsersTx(ctx context.Context, tx *sql.Tx, teamName string, users []any, placeholders []string) error {
-	const op = "storage.postgres.UpsertUsersTx"
+func (s *Storage) GetAvailabilityTemplate(ctx context.Context, id string) (*models.AvailabilityTplSlot, error) {
+	const op = "storage.postgres.GetAvailabilityTemplate"
 
-	if len(users) == 0 {
-		return nil
-	}
+	var template models.AvailabilityTplSlot
+	var recurrenceDays pq.StringArray
 
-	query := fmt.Sprintf(`
-		INSERT INTO users (user_id, username, team_name, is_active)
-		VALUES %s
-		ON CONFLICT (user_id)
-		DO UPDATE
-		SET team_name = EXCLUDED.team_name,
-			username = EXCLUDED.username,
-			is_active = EXCLUDED.is_active;
-		`, 
-		strings.Join(placeholders, ","),
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, teacher_id, recurrence_days, recurrence_start_time, recurrence_end_time,
+		 slot_duration_minutes, start_date, end_date, enabled
+		 FROM availability_templates WHERE id = $1`,
+		id,
+	).Scan(
+		&template.ID,
+		&template.TeacherID,
+		&recurrenceDays,
+		&template.RecurrenceStartTime,
+		&template.RecurrenceEndTime,
+		&template.SlotDurationMinutes,
+		&template.StartDate,
+		&template.EndDate,
+		&template.Enabled,
 	)
 
-	_, err := tx.ExecContext(ctx, query, users...)
 	if err != nil {
-		return fmt.Errorf("%s exec: %w", op, err)
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	template.RecurrenceDays = []string(recurrenceDays)
+
+	return &template, nil
+}
+
+
+func (s *Storage) UpdateAvailabilityTemplate(ctx context.Context, template *models.AvailabilityTplSlot) error {
+	const op = "storage.postgres.UpdateAvailabilityTemplate"
+
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE availability_templates 
+		SET teacher_id = $1, recurrence_days = $2, recurrence_start_time = $3, 
+		    recurrence_end_time = $4, slot_duration_minutes = $5, start_date = $6,
+		    end_date = $7, enabled = $8
+		WHERE id = $9`,
+		template.TeacherID,
+		pq.Array(template.RecurrenceDays),
+		template.RecurrenceStartTime,
+		template.RecurrenceEndTime,
+		template.SlotDurationMinutes,
+		template.StartDate,
+		template.EndDate,
+		template.Enabled,
+		template.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
 	}
 
 	return nil
 }
 
-// #### team/get ####
+func (s *Storage) DeleteAvailabilityTemplate(ctx context.Context, id string) error {
+	const op = "storage.postgres.DeleteAvailabilityTemplate"
 
-func (s *Storage) GetTeam(ctx context.Context, teamName string) (*models.Team, error) {
-	const op = "storage.postgres.GetTeamByName"
+	res, err := s.db.ExecContext(ctx, `DELETE FROM availability_templates WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
 
-	var team models.Team
-	var user models.User
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
 
-	err := s.db.QueryRowContext(ctx, `SELECT team_name FROM teams WHERE team_name=$1`, teamName).Scan(&team.TeamName)
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+	}
+
+	return nil
+}
+
+// Time Blocks
+
+func (s *Storage) CreateTimeBlock(ctx context.Context, block *models.TimeBlock) (string, error) {
+	const op = "storage.postgres.CreateTimeBlock"
+
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		`INSERT INTO time_blocks (teacher_id, start, "end", reason, type)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`,
+		block.TeacherID,
+		block.Start,
+		block.End,
+		block.Reason,
+		string(block.Type),
+	).Scan(&id)
+
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) GetTimeBlock(ctx context.Context, id string) (*models.TimeBlock, error) {
+	const op = "storage.postgres.GetTimeBlock"
+
+	var block models.TimeBlock
+	var blockType string
+
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, teacher_id, start, "end", reason, type, created_at, updated_at
+		 FROM time_blocks WHERE id = $1`,
+		id,
+	).Scan(
+		&block.ID,
+		&block.TeacherID,
+		&block.Start,
+		&block.End,
+		&block.Reason,
+		&blockType,
+		&block.CreatedAt,
+		&block.UpdatedAt,
+	)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
 		}
-
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT user_id, username, is_active FROM users WHERE team_name=$1`, teamName)
+	block.Type = models.TimeBlockType(blockType)
+
+	return &block, nil
+}
+
+func (s *Storage) ListTimeBlocks(ctx context.Context, teacherID *string, from, to *time.Time) ([]*models.TimeBlock, error) {
+	const op = "storage.postgres.ListTimeBlocks"
+
+	query := `SELECT id, teacher_id, start, "end", reason, type, created_at, updated_at FROM time_blocks WHERE 1=1`
+	args := []interface{}{}
+	argPos := 1
+
+	if teacherID != nil {
+		query += fmt.Sprintf(" AND teacher_id = $%d", argPos)
+		args = append(args, *teacherID)
+		argPos++
+	}
+
+	if from != nil {
+		query += fmt.Sprintf(" AND \"end\" >= $%d", argPos)
+		args = append(args, *from)
+		argPos++
+	}
+
+	if to != nil {
+		query += fmt.Sprintf(" AND start <= $%d", argPos)
+		args = append(args, *to)
+		argPos++
+	}
+
+	query += " ORDER BY start DESC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
-
 	defer rows.Close()
 
+	var blocks []*models.TimeBlock
 	for rows.Next() {
-		err := rows.Scan(&user.UserID, &user.Username, &user.IsActive)
+		var block models.TimeBlock
+		var blockType string
+
+		err := rows.Scan(
+			&block.ID,
+			&block.TeacherID,
+			&block.Start,
+			&block.End,
+			&block.Reason,
+			&blockType,
+			&block.CreatedAt,
+			&block.UpdatedAt,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
 
-		user.TeamName = teamName
-
-		team.Members = append(team.Members, user)
+		block.Type = models.TimeBlockType(blockType)
+		blocks = append(blocks, &block)
 	}
-	
-	return &team, nil
+
+	return blocks, nil
 }
 
-// #### user/set_is_active ####
+func (s *Storage) UpdateTimeBlock(ctx context.Context, block *models.TimeBlock) error {
+	const op = "storage.postgres.UpdateTimeBlock"
 
-func (s *Storage) SetIsActive(ctx context.Context, userID string, isActive bool) (*models.User, error) {
-	const op = "storage.postgres.SetIsActive"
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE time_blocks 
+		SET teacher_id = $1, start = $2, "end" = $3, reason = $4, type = $5
+		WHERE id = $6`,
+		block.TeacherID,
+		block.Start,
+		block.End,
+		block.Reason,
+		string(block.Type),
+		block.ID,
+	)
 
-	var user models.User
-	var isActiveDB bool
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
 
-	err := s.db.QueryRowContext(ctx, `SELECT is_active FROM users WHERE user_id=$1`, userID).Scan(&isActiveDB)
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+	}
+
+	return nil
+}
+
+func (s *Storage) DeleteTimeBlock(ctx context.Context, id string) error {
+	const op = "storage.postgres.DeleteTimeBlock"
+
+	res, err := s.db.ExecContext(ctx, `DELETE FROM time_blocks WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+	}
+
+	return nil
+}
+
+// Slots
+
+func (s *Storage) GetSlot(ctx context.Context, id string) (*models.Slot, error) {
+	const op = "storage.postgres.GetSlot"
+
+	var slot models.Slot
+	var status string
+	var bookingID, templateID sql.NullString
+
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, teacher_id, starts_at, ends_at, status, booking_id, template_id, created_at, updated_at
+		 FROM slots WHERE id = $1`,
+		id,
+	).Scan(
+		&slot.ID,
+		&slot.TeacherID,
+		&slot.Start,
+		&slot.End,
+		&status,
+		&bookingID,
+		&templateID,
+		&slot.CreatedAt,
+		&slot.UpdatedAt,
+	)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, response.ErrNotFound
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
 		}
-
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	if isActiveDB != isActive {
-		_, err := s.db.ExecContext(ctx, `UPDATE users SET is_active=$1 WHERE user_id=$2`, isActive, userID)
+	slot.Status = models.SlotStatus(status)
+	if bookingID.Valid {
+		slot.BookingID = &bookingID.String
+	}
+	if templateID.Valid {
+		slot.TemplateID = &templateID.String
+	}
+
+	return &slot, nil
+}
+
+type SlotFilters struct {
+	TeacherID *string
+	From      *time.Time
+	To        *time.Time
+	Duration  *int
+	Status    *string
+	Q         *string
+	Page      *int
+	PerPage   *int
+	Sort      *string
+}
+
+func (s *Storage) ListSlots(ctx context.Context, filters interface{}) ([]*models.Slot, error) {
+	const op = "storage.postgres.ListSlots"
+
+	query := `SELECT id, teacher_id, starts_at, ends_at, status, booking_id, template_id, created_at, updated_at FROM slots WHERE 1=1`
+	args := []interface{}{}
+	argPos := 1
+
+	if filters != nil {
+		f, ok := filters.(*SlotFilters)
+		if !ok {
+			return nil, fmt.Errorf("%s: invalid filters type", op)
+		}
+		if f.TeacherID != nil {
+			query += fmt.Sprintf(" AND teacher_id = $%d", argPos)
+			args = append(args, *f.TeacherID)
+			argPos++
+		}
+
+		if f.From != nil {
+			query += fmt.Sprintf(" AND start >= $%d", argPos)
+			args = append(args, *f.From)
+			argPos++
+		}
+
+		if f.To != nil {
+			query += fmt.Sprintf(" AND \"end\" <= $%d", argPos)
+			args = append(args, *f.To)
+			argPos++
+		}
+
+		if f.Status != nil {
+			query += fmt.Sprintf(" AND status = $%d", argPos)
+			args = append(args, *f.Status)
+			argPos++
+		}
+
+		if f.Duration != nil {
+			query += fmt.Sprintf(" AND EXTRACT(EPOCH FROM (\"end\" - start))/60 = $%d", argPos)
+			args = append(args, *f.Duration)
+			argPos++
+		}
+
+		// Sort
+		sortBy := "start"
+		if f.Sort != nil {
+			sortBy = *f.Sort
+		}
+		query += fmt.Sprintf(" ORDER BY %s", sortBy)
+
+		if f.Page != nil && f.PerPage != nil {
+			offset := (*f.Page - 1) * *f.PerPage
+			query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argPos, argPos+1)
+			args = append(args, *f.PerPage, offset)
+		}
+	} else {
+		query += " ORDER BY start"
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	defer rows.Close()
+
+	var slots []*models.Slot
+	for rows.Next() {
+		var slot models.Slot
+		var status string
+		var bookingID, templateID sql.NullString
+
+		err := rows.Scan(
+			&slot.ID,
+			&slot.TeacherID,
+			&slot.Start,
+			&slot.End,
+			&status,
+			&bookingID,
+			&templateID,
+			&slot.CreatedAt,
+			&slot.UpdatedAt,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
+
+		slot.Status = models.SlotStatus(status)
+		if bookingID.Valid {
+			slot.BookingID = &bookingID.String
+		}
+		if templateID.Valid {
+			slot.TemplateID = &templateID.String
+		}
+
+		slots = append(slots, &slot)
 	}
 
-	err = s.db.QueryRowContext(ctx, 
-	`SELECT username, team_name, is_active 
-	FROM users WHERE user_id=$1`,userID).
-	Scan(
-		&user.Username, 
-		&user.TeamName, 
-		&user.IsActive,
-	)
+	return slots, nil
+}
 
+func (s *Storage) GetSlotsByIDs(ctx context.Context, ids []string) ([]*models.Slot, error) {
+	const op = "storage.postgres.GetSlotsByIDs"
+
+	if len(ids) == 0 {
+		return []*models.Slot{}, nil
+	}
+
+	query := `SELECT id, teacher_id, starts_at, ends_at, status, booking_id, template_id, created_at, updated_at 
+			  FROM slots WHERE id = ANY($1)`
+	rows, err := s.db.QueryContext(ctx, query, pq.Array(ids))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+	defer rows.Close()
 
-	user.UserID = userID
+	var slots []*models.Slot
+	for rows.Next() {
+		var slot models.Slot
+		var status string
+		var bookingID, templateID sql.NullString
 
-	return &user, nil
+		err := rows.Scan(
+			&slot.ID,
+			&slot.TeacherID,
+			&slot.Start,
+			&slot.End,
+			&status,
+			&bookingID,
+			&templateID,
+			&slot.CreatedAt,
+			&slot.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
 
+		slot.Status = models.SlotStatus(status)
+		if bookingID.Valid {
+			slot.BookingID = &bookingID.String
+		}
+		if templateID.Valid {
+			slot.TemplateID = &templateID.String
+		}
+
+		slots = append(slots, &slot)
+	}
+
+	return slots, nil
 }
 
-func (s *Storage) PullRequestCreate(ctx context.Context, tx *sql.Tx, pr *api.PRCreateRequest) error {
-	const op = "storage.postgres.PullRequestCreate"
+func (s *Storage) CreateSlot(ctx context.Context, tx *sql.Tx, slot *models.Slot) (string, error) {
+	const op = "storage.postgres.CreateSlot"
 
-	_, err := tx.ExecContext(ctx,
-		`INSERT INTO pull_requests 
-		(pull_request_id, pull_request_name, author_id, pr_status) 
-		VALUES ($1, $2, $3, $4)`,
-		pr.PullRequestID,
-		pr.PullRequestName,
-		pr.AuthorID,
-		string(models.PR_OPEN),
-	)
+	var id string
+	err := tx.QueryRowContext(ctx,
+		`INSERT INTO slots (teacher_id, starts_at, ends_at, status, template_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`,
+		slot.TeacherID,
+		slot.Start,
+		slot.End,
+		string(slot.Status),
+		slot.TemplateID,
+	).Scan(&id)
+
 	if err != nil {
-		sqlErr, ok := err.(*pq.Error)
-		if ok && sqlErr.Code == "23505" { 
-			return fmt.Errorf("%s: %w", op, response.ErrPRExists)
-		}
-		if ok && sqlErr.Code == "23503" {
-			return fmt.Errorf("%s: %w", op, response.ErrNotFound)
-		}
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
 
+	return id, nil
+}
+
+func (s *Storage) UpdateSlotStatus(ctx context.Context, slotID string, status models.SlotStatus, bookingID *string) error {
+	const op = "storage.postgres.UpdateSlotStatus"
+
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE slots SET status = $1, booking_id = $2 WHERE id = $3`,
+		string(status),
+		bookingID,
+		slotID,
+	)
+
+	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
 }
 
-func (s *Storage) AddPRReviewers(ctx context.Context, tx *sql.Tx, prID string, authorID string) ([]string, error) {
-	const op = "storage.postgres.AddPRReviewers"
+func (s *Storage) GetSlotForBooking(ctx context.Context, slotID string) (*models.Slot, error) {
+	const op = "storage.postgres.GetSlotForBooking"
 
-	var teamName string
-	var userID string
-	var members []string
-	var isActive bool
+	var slot models.Slot
+	var status string
+	var bookingID, templateID sql.NullString
 
-	err := tx.QueryRowContext(ctx, `SELECT team_name FROM users WHERE user_id=$1`, authorID).Scan(&teamName)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	rows, err := tx.QueryContext(ctx, `SELECT user_id, is_active FROM users WHERE team_name=$1`, teamName)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		err := rows.Scan(&userID, &isActive)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", op, err)
-		}
-		if userID != authorID {
-			if isActive{
-				members = append(members, userID)
-			}
-		}
-	}
-
-	switch {
-	case len(members) == 0:
-		return nil, nil
-	case len(members) == 1:
-		
-		_, err := tx.ExecContext(ctx,
-			`INSERT INTO pr_reviewers
-			(pull_request_id, reviewer_id) 
-			VALUES ($1, $2) 
-			ON CONFLICT DO NOTHING`,
-			prID,
-			members[0],
-		)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", op, err)
-		}
-
-		return members, nil
-	default:
-		i := rand.Intn(len(members))
-		j := rand.Intn(len(members) - 1)
-		if j == i {
-			j++
-		}
-
-		_, err := tx.ExecContext(ctx,
-			`INSERT INTO pr_reviewers
-			(pull_request_id, reviewer_id) 
-			VALUES 
-			($1, $2),
-			($1, $3)
-			ON CONFLICT DO NOTHING`,
-			prID,
-			members[i],
-			members[j],
-		)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", op, err)
-		}
-
-		return []string{members[i], members[j]}, nil
-	}
-}
-
-func (s *Storage) MergePullRequest(ctx context.Context, prID string) (*models.PullRequestShort, *time.Time, []string, error) {
-	const op = "storage.postgres.MergePullRequest"
-
-	var pr models.PullRequestShort
-	var mergedAt time.Time
-	var reviewer string
-	var reviewers []string
-
-
-	err := s.db.QueryRowContext(ctx, `SELECT pr_status FROM pull_requests WHERE pull_request_id=$1`, prID).Scan(&pr.Status)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
-		}
-
-		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	if pr.Status != models.PR_MERGED {
-		_, err := s.db.ExecContext(ctx, `UPDATE pull_requests SET pr_status=$1 
-		WHERE pull_request_id=$2`, string(models.PR_MERGED), prID)
-
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-		}
-	}
-
-	prErr := s.db.QueryRowContext(ctx, `SELECT pull_request_name, author_id, pr_status, merged_at 
-	FROM pull_requests WHERE pull_request_id=$1`, prID).
-	Scan(
-		&pr.PullRequestName,
-		&pr.AuthorID,
-		&pr.Status,
-		&mergedAt,
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, teacher_id, starts_at, ends_at, status, booking_id, template_id
+		 FROM slots WHERE id = $1 FOR UPDATE`,
+		slotID,
+	).Scan(
+		&slot.ID,
+		&slot.TeacherID,
+		&slot.Start,
+		&slot.End,
+		&status,
+		&bookingID,
+		&templateID,
 	)
 
-	if prErr != nil {
-		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	pr.PullRequestID = prID
-
-	rows, revErr := s.db.QueryContext(ctx, `SELECT reviewer_id FROM pr_reviewers WHERE pull_request_id=$1`, prID)
-	if revErr != nil {
-		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		err := rows.Scan(&reviewer)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-		}
-
-		reviewers = append(reviewers, reviewer)
-	}
-
-	return &pr, &mergedAt, reviewers, nil
-}
-
-func (s *Storage) ReassignPRReviewers(ctx context.Context, prID string, oldReviewerID string) (*models.PullRequestShort, []string, error) {
-	const op = "storage.postgres.ReassignPRReviewers"
-
-	var pr models.PullRequestShort
-	var revID string
-	var oldReviewerID2 string
-	var reviewers []string
-
-	err := s.db.QueryRowContext(ctx, `SELECT pull_request_name, author_id, pr_status 
-	FROM pull_requests WHERE pull_request_id=$1`, prID).
-		Scan(
-			&pr.PullRequestName,
-			&pr.AuthorID,
-			&pr.Status,
-		)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
-		}
-		return nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-	if pr.Status == models.PR_MERGED {
-		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrPRMerged)
-	}
-
-	pr.PullRequestID = prID
-
-	rows, err := s.db.QueryContext(ctx, `SELECT reviewer_id FROM pr_reviewers WHERE pull_request_id=$1`, prID)
-	if err != nil{
-		if err == sql.ErrNoRows{
-			return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
-		}
-		return nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		err := rows.Scan(&revID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", op, err)
-		}
-
-		reviewers = append(reviewers, revID)
-	}
-
-	switch {
-	case len(reviewers) == 1 && reviewers[0] == oldReviewerID :
-		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
-	case len(reviewers) == 1 && reviewers[0] != oldReviewerID:
-		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotAssigned)
-	case len(reviewers) == 2 && (reviewers[0] != oldReviewerID && reviewers[1] != oldReviewerID):
-		return nil, nil, fmt.Errorf("%s: %w", op, response.ErrNotAssigned)
-	default:
-		for _, reviewer := range reviewers{
-			if reviewer != oldReviewerID{
-				oldReviewerID2 = reviewer
-				break
-			}
-		}
-	}
-
-	var teamName string
-	err = s.db.QueryRowContext(ctx, `SELECT team_name FROM users WHERE user_id=$1`, pr.AuthorID).Scan(&teamName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	var newReviewerID string
-	err = s.db.QueryRowContext(ctx, `
-		SELECT user_id FROM users
-		WHERE team_name=$1 
-		AND is_active=TRUE 
-		AND user_id != $2 
-		AND user_id != $3
-		ORDER BY random()
-		LIMIT 1`, teamName, 
-		pr.AuthorID, 
-		oldReviewerID).
-		Scan(&newReviewerID)
-	
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return &pr, nil, fmt.Errorf("%s: %w", op, response.ErrNoCandidate)
-		}
-		return nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	_, err = s.db.ExecContext(ctx, `UPDATE pr_reviewers SET reviewer_id=$1 WHERE pull_request_id=$2 AND reviewer_id=$3`, newReviewerID, prID, oldReviewerID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return &pr, []string{newReviewerID, oldReviewerID2}, nil
-}
-
-func (s *Storage) GetReview(ctx context.Context, userID string) (*[]models.PullRequestShort, error){
-	const op = "storage.postgres.GetReview"
-
-	var prID string
-	var pullRequests []models.PullRequestShort
-	var pr models.PullRequestShort
-
-	err := s.db.QueryRowContext(ctx, `SELECT user_id FROM users WHERE user_id=$1`, userID).Scan(&userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
 		}
-
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+	if status != string(models.SlotFree){
+		return nil, fmt.Errorf("%s: %w", op, response.ErrSlotNotAvailable)
+	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT pull_request_id FROM pr_reviewers WHERE reviewer_id=$1`, userID)
+	return &slot, nil
+}
+
+
+func (s *Storage) CreateBooking(ctx context.Context, tx *sql.Tx, booking *models.Booking) (string, error) {
+	const op = "storage.postgres.CreateBooking"
+
+	var id string
+	err := tx.QueryRowContext(ctx,
+		`INSERT INTO bookings (slot_id, student_id, teacher_id, status)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id`,
+		booking.SlotID,
+		booking.StudentID,
+		booking.TeacherID,
+		string(booking.Status),
+	).Scan(&id)
 	if err != nil {
-		if err == sql.ErrNoRows{
-			return &pullRequests, nil
-		}
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+	_, err = tx.ExecContext(ctx, 
+		`UPDATE slots SET status = $1, booking_id = $2 WHERE id = $3`,
+		string(models.SlotBooked), id, booking.SlotID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
 
+	return id, nil
+}
+
+func (s *Storage) GetBooking(ctx context.Context, id string) (*models.Booking, error) {
+	const op = "storage.postgres.GetBooking"
+
+	var booking models.Booking
+	var status string
+
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, slot_id, student_id, teacher_id, status
+		 FROM bookings WHERE id = $1`,
+		id,
+	).Scan(
+		&booking.ID,
+		&booking.SlotID,
+		&booking.StudentID,
+		&booking.TeacherID,
+		&status,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
+	booking.Status = models.BookingStatus(status)
+
+	return &booking, nil
+}
+
+func (s *Storage) ListBookings(ctx context.Context, studentID, teacherID *string, from, to *time.Time, status *string) ([]*models.Booking, error) {
+	const op = "storage.postgres.ListBookings"
+
+	query := `SELECT id, slot_id, student_id, teacher_id, status,
+				FROM bookings WHERE 1=1`
+	args := []interface{}{}
+	argPos := 1
+
+	if studentID != nil {
+		query += fmt.Sprintf(" AND student_id = $%d", argPos)
+		args = append(args, *studentID)
+		argPos++
+	}
+
+	if teacherID != nil {
+		query += fmt.Sprintf(" AND teacher_id = $%d", argPos)
+		args = append(args, *teacherID)
+		argPos++
+	}
+
+	if from != nil {
+		query += fmt.Sprintf(" AND created_at >= $%d", argPos)
+		args = append(args, *from)
+		argPos++
+	}
+
+	if to != nil {
+		query += fmt.Sprintf(" AND created_at <= $%d", argPos)
+		args = append(args, *to)
+		argPos++
+	}
+
+	if status != nil {
+		query += fmt.Sprintf(" AND status = $%d", argPos)
+		args = append(args, *status)
+		argPos++
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
 	defer rows.Close()
 
+	var bookings []*models.Booking
 	for rows.Next() {
-		err := rows.Scan(&prID)
+		var booking models.Booking
+		var status string
+		var paymentStr string
+
+		err := rows.Scan(
+			&booking.ID,
+			&booking.SlotID,
+			&booking.StudentID,
+			&booking.TeacherID,
+			&status,
+			&paymentStr,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
-		
-		prErr := s.db.QueryRowContext(ctx, 
-			`SELECT pull_request_name, 
-			author_id, pr_status 
-			FROM pull_requests 
-			WHERE pull_request_id=$1`, prID).
-			Scan(
-				&pr.PullRequestName,
-				&pr.AuthorID,
-				&pr.Status,
-			)
-		if prErr != nil{
+
+		booking.Status = models.BookingStatus(status)
+
+		bookings = append(bookings, &booking)
+	}
+
+	return bookings, nil
+}
+
+func (s *Storage) UpdateBookingStatus(ctx context.Context, bookingID string, status models.BookingStatus) error {
+	const op = "storage.postgres.UpdateBookingStatus"
+
+	now := time.Now()
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE bookings 
+		SET status = $1, cancelled_at = CASE WHEN $1 = 'cancelled' THEN $2 ELSE cancelled_at END
+		WHERE id = $3`,
+		string(status),
+		now,
+		bookingID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+	}
+
+	return nil
+}
+
+func (s *Storage) RescheduleBooking(ctx context.Context, tx *sql.Tx, bookingID, newSlotID string) error {
+	const op = "storage.postgres.RescheduleBooking"
+
+	// Get old slot and new slot
+	var oldSlotID string
+	err := tx.QueryRowContext(ctx, `SELECT slot_id FROM bookings WHERE id = $1`, bookingID).Scan(&oldSlotID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Update booking slot
+	_, err = tx.ExecContext(ctx, `UPDATE bookings SET slot_id = $1 WHERE id = $2`, newSlotID, bookingID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Update old slot to free
+	_, err = tx.ExecContext(ctx, `UPDATE slots SET status = 'free', booking_id = NULL WHERE id = $1`, oldSlotID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Update new slot to booked
+	_, err = tx.ExecContext(ctx, `UPDATE slots SET status = 'booked', booking_id = $1 WHERE id = $2`, bookingID, newSlotID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) DeleteBooking(ctx context.Context, bookingID string) error {
+	const op = "storage.postgres.DeleteBooking"
+
+	res, err := s.db.ExecContext(ctx, `DELETE FROM bookings WHERE id = $1`, bookingID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, response.ErrNotFound)
+	}
+
+	return nil
+}
+
+// Attendance
+
+func (s *Storage) CreateAttendance(ctx context.Context, attendance *models.Attendance) (string, error) {
+	const op = "storage.postgres.CreateAttendance"
+
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		`INSERT INTO attendance (booking_id, status, notes)
+		VALUES ($1, $2, $3)
+		RETURNING id`,
+		attendance.BookingID,
+		string(attendance.Status),
+		attendance.Notes,
+	).Scan(&id)
+
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) GetAttendance(ctx context.Context, id string) (*models.Attendance, error) {
+	const op = "storage.postgres.GetAttendance"
+
+	var attendance models.Attendance
+	var status string
+
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, booking_id, status, notes, created_at, updated_at
+		 FROM attendance WHERE id = $1`,
+		id,
+	).Scan(
+		&attendance.ID,
+		&attendance.BookingID,
+		&status,
+		&attendance.Notes,
+		&attendance.CreatedAt,
+		&attendance.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, response.ErrNotFound)
+		}
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	attendance.Status = models.AttendanceStatus(status)
+
+	return &attendance, nil
+}
+
+func (s *Storage) ListAttendance(ctx context.Context, teacherID *string, from, to *time.Time) ([]*models.Attendance, error) {
+	const op = "storage.postgres.ListAttendance"
+
+	query := `SELECT a.id, a.booking_id, a.status, a.notes, a.created_at, a.updated_at
+			  FROM attendance a
+			  JOIN bookings b ON a.booking_id = b.id
+			  WHERE 1=1`
+	args := []interface{}{}
+	argPos := 1
+
+	if teacherID != nil {
+		query += fmt.Sprintf(" AND b.teacher_id = $%d", argPos)
+		args = append(args, *teacherID)
+		argPos++
+	}
+
+	if from != nil {
+		query += fmt.Sprintf(" AND a.created_at >= $%d", argPos)
+		args = append(args, *from)
+		argPos++
+	}
+
+	if to != nil {
+		query += fmt.Sprintf(" AND a.created_at <= $%d", argPos)
+		args = append(args, *to)
+		argPos++
+	}
+
+	query += " ORDER BY a.created_at DESC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	defer rows.Close()
+
+	var attendances []*models.Attendance
+	for rows.Next() {
+		var attendance models.Attendance
+		var status string
+
+		err := rows.Scan(
+			&attendance.ID,
+			&attendance.BookingID,
+			&status,
+			&attendance.Notes,
+			&attendance.CreatedAt,
+			&attendance.UpdatedAt,
+		)
+		if err != nil {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
 
-		pr.PullRequestID = prID
-
-		pullRequests = append(pullRequests, pr)
+		attendance.Status = models.AttendanceStatus(status)
+		attendances = append(attendances, &attendance)
 	}
 
-	return &pullRequests, nil
+	return attendances, nil
 }
