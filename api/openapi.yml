@@ -1,849 +1,1181 @@
-openapi: 3.0.3
+# openapi: 3.0.3
 
-info:
-  title: PR Reviewer Assignment Service (Test Task, Fall 2025)
-  version: "1.0.0"
+# info:
+#   title: RASP Service API
+#   description: API для управления расписанием занятий, бронированиями и посещаемостью
+#   version: "1.0.0"
+#   contact:
+#     name: API Support
 
+# servers:
+#   - url: http://localhost:8080
+#     description: Локальный сервер разработки
 
-tags:
-  - name: Teams
-  - name: Users
-  - name: PullRequests
-  - name: Health
+# tags:
+#   - name: Availability Templates
+#     description: Управление шаблонами доступности преподавателей
+#   - name: Time Blocks
+#     description: Управление блоками времени (отпуска, больничные и т.д.)
+#   - name: Slots
+#     description: Управление временными слотами для занятий
+#   - name: Bookings
+#     description: Управление бронированиями занятий
+#   - name: Attendance
+#     description: Управление посещаемостью занятий
 
-servers: [
-  {
-    url: "http://localhost:8080"
-  }
-]
+# components:
+#   schemas:
+#     ErrorResponse:
+#       type: object
+#       required:
+#         - error
+#       properties:
+#         error:
+#           type: object
+#           required:
+#             - code
+#             - message
+#           properties:
+#             code:
+#               type: string
+#               enum:
+#                 - REQUEST_FAILED
+#                 - FAILED_TO_DECODE
+#                 - NOT_FOUND
+#                 - LOCKED
+#                 - CONFLICT
+#                 - SLOT_NOT_AVAILABLE
+#             message:
+#               type: string
+#       example:
+#         error:
+#           code: NOT_FOUND
+#           message: resource not found
 
-components:
-  parameters:
-    TeamNameQuery:
-      name: team_name
-      in: query
-      required: true
-      schema:
-        type: string
-      description: Уникальное имя команды
-    UserIdQuery:
-      name: user_id
-      in: query
-      required: true
-      schema:
-        type: string
-      description: Идентификатор пользователя
-  schemas:
-    ErrorResponse:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-              enum:
-                - TEAM_EXISTS
-                - PR_EXISTS
-                - PR_MERGED
-                - NOT_ASSIGNED
-                - NO_CANDIDATE
-                - NOT_FOUND
-            message:
-              type: string
-      example:
-        error:
-          code: NOT_FOUND
-          message: resource not found
-    TeamMember:
-      type: object
-      required: [ user_id, username, is_active ]
-      properties:
-        user_id:
-          type: string
-        username:
-          type: string
-        is_active:
-          type: boolean
-    Team:
-      type: object
-      required: [ team_name, members]
-      properties:
-        team_name:
-          type: string
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/TeamMember'
-    User:
-      type: object
-      required: [ user_id, username, team_name, is_active ]
-      properties:
-        user_id:
-          type: string
-        username:
-          type: string
-        team_name:
-          type: string
-        is_active:
-          type: boolean
-    PullRequest:
-      type: object
-      required: [ pull_request_id, pull_request_name, author_id, status, assigned_reviewers]
-      properties:
-        pull_request_id:
-          type: string
-        pull_request_name:
-          type: string
-        author_id:
-          type: string
-        status:
-          type: string
-          enum: [OPEN, MERGED]
-        assigned_reviewers:
-          type: array
-          items:
-            type: string
-          description: user_id назначенных ревьюверов (0..2)
-        createdAt:
-          type: string
-          format: date-time
-          nullable: true
-        mergedAt:
-          type: string
-          format: date-time
-          nullable: true
-    PullRequestShort:
-      type: object
-      required: [ pull_request_id, pull_request_name, author_id, status]
-      properties:
-        pull_request_id:
-          type: string
-        pull_request_name:
-          type: string
-        author_id:
-          type: string
-        status:
-          type: string
-          enum: [OPEN, MERGED]
+#     RecurrenceConfig:
+#       type: object
+#       required:
+#         - days
+#         - start_time
+#         - end_time
+#       properties:
+#         days:
+#           type: array
+#           items:
+#             type: string
+#             enum:
+#               - monday
+#               - tuesday
+#               - wednesday
+#               - thursday
+#               - friday
+#               - saturday
+#               - sunday
+#           description: Дни недели, когда доступен преподаватель
+#         start_time:
+#           type: string
+#           format: time
+#           example: "09:00"
+#           description: Время начала доступности (формат HH:MM)
+#         end_time:
+#           type: string
+#           format: time
+#           example: "18:00"
+#           description: Время окончания доступности (формат HH:MM)
 
-paths:
-  /team/add:
-    post:
-      tags: [Teams]
-      summary: Создать команду с участниками (создаёт/обновляет пользователей)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Team'
-            example:
-              team_name: payments
-              members:
-                - user_id: u1
-                  username: Alice
-                  is_active: true
-                - user_id: u2
-                  username: Bob
-                  is_active: true
-      responses:
-        '201':
-          description: Команда создана
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  team:
-                    $ref: '#/components/schemas/Team'
-              example:
-                team:
-                  team_name: backend
-                  members:
-                    - user_id: u1
-                      username: Alice
-                      is_active: true
-                    - user_id: u2
-                      username: Bob
-                      is_active: true
-        '400':
-          description: Команда уже существует
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example:
-                error:
-                  code: TEAM_EXISTS
-                  message: team_name already exists
+#     AvailabilityTemplateRequest:
+#       type: object
+#       required:
+#         - teacher_id
+#         - recurrence
+#         - slot_duration_minutes
+#         - start_date
+#         - end_date
+#         - enabled
+#       properties:
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         recurrence:
+#           $ref: '#/components/schemas/RecurrenceConfig'
+#         slot_duration_minutes:
+#           type: integer
+#           minimum: 1
+#           description: Длительность слота в минутах
+#         start_date:
+#           type: string
+#           format: date
+#           example: "2024-01-01"
+#           description: Дата начала действия шаблона
+#         end_date:
+#           type: string
+#           format: date
+#           example: "2024-12-31"
+#           description: Дата окончания действия шаблона
+#         enabled:
+#           type: boolean
+#           description: Включен ли шаблон
 
-  /team/get:
-    get:
-      tags: [Teams]
-      summary: Получить команду с участниками
-      parameters:
-        - $ref: '#/components/parameters/TeamNameQuery'
-      responses:
-        '200':
-          description: Объект команды
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Team'
-              example:
-                team_name: backend
-                members:
-                  - user_id: u1
-                    username: Alice
-                    is_active: true
-                  - user_id: u2
-                    username: Bob
-                    is_active: true
-        '404':
-          description: Команда не найдена
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#     AvailabilityTemplateResponse:
+#       type: object
+#       required:
+#         - id
+#         - teacher_id
+#         - recurrence
+#         - slot_duration_minutes
+#         - start_date
+#         - end_date
+#         - enabled
+#       properties:
+#         id:
+#           type: string
+#           description: Уникальный идентификатор шаблона
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         recurrence:
+#           $ref: '#/components/schemas/RecurrenceConfig'
+#         slot_duration_minutes:
+#           type: integer
+#           minimum: 1
+#           description: Длительность слота в минутах
+#         start_date:
+#           type: string
+#           format: date
+#           description: Дата начала действия шаблона
+#         end_date:
+#           type: string
+#           format: date
+#           description: Дата окончания действия шаблона
+#         enabled:
+#           type: boolean
+#           description: Включен ли шаблон
 
-  /users/setIsActive:
-    post:
-      tags: [Users]
-      summary: Установить флаг активности пользователя
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ user_id, is_active ]
-              properties:
-                user_id:
-                  type: string
-                is_active:
-                  type: boolean
-            example:
-              user_id: u2
-              is_active: false
-      responses:
-        '200':
-          description: Обновлённый пользователь
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user:
-                    $ref: '#/components/schemas/User'
-              example:
-                user:
-                  user_id: u2
-                  username: Bob
-                  team_name: backend
-                  is_active: false
-        '404':
-          description: Пользователь не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#     TimeBlockRequest:
+#       type: object
+#       required:
+#         - teacher_id
+#         - start
+#         - end
+#         - reason
+#         - type
+#       properties:
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         start:
+#           type: string
+#           format: date-time
+#           example: "2024-01-15T00:00:00Z"
+#           description: Время начала блока
+#         end:
+#           type: string
+#           format: date-time
+#           example: "2024-01-20T23:59:59Z"
+#           description: Время окончания блока
+#         reason:
+#           type: string
+#           description: Причина блокировки времени
+#         type:
+#           type: string
+#           enum:
+#             - vacation
+#             - sick
+#             - other
+#           description: Тип блока времени
 
-  /pullRequest/create:
-    post:
-      tags: [PullRequests]
-      summary: Создать PR и автоматически назначить до 2 ревьюверов из команды автора
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id, pull_request_name, author_id ]
-              properties:
-                pull_request_id: { type: string }
-                pull_request_name: { type: string }
-                author_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-              pull_request_name: Add search
-              author_id: u1
-      responses:
-        '201':
-          description: PR создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: OPEN
-                  assigned_reviewers: [u2, u3]
-        '404':
-          description: Автор/команда не найдены
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '409':
-          description: PR уже существует
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example:
-                error: { code: PR_EXISTS, message: PR id already exists }
+#     TimeBlockResponse:
+#       type: object
+#       required:
+#         - id
+#         - teacher_id
+#         - start
+#         - end
+#         - reason
+#         - type
+#       properties:
+#         id:
+#           type: string
+#           description: Уникальный идентификатор блока времени
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         start:
+#           type: string
+#           format: date-time
+#           description: Время начала блока
+#         end:
+#           type: string
+#           format: date-time
+#           description: Время окончания блока
+#         reason:
+#           type: string
+#           description: Причина блокировки времени
+#         type:
+#           type: string
+#           enum:
+#             - vacation
+#             - sick
+#             - other
+#           description: Тип блока времени
 
-  /pullRequest/merge:
-    post:
-      tags: [PullRequests]
-      summary: Пометить PR как MERGED (идемпотентная операция)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id ]
-              properties:
-                pull_request_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-      responses:
-        '200':
-          description: PR в состоянии MERGED
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: MERGED
-                  assigned_reviewers: [u2, u3]
-                  mergedAt: 2025-10-24T12:34:56Z
-        '404':
-          description: PR не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#     SlotResponse:
+#       type: object
+#       required:
+#         - id
+#         - start
+#         - end
+#         - teacher_id
+#         - status
+#       properties:
+#         id:
+#           type: string
+#           description: Уникальный идентификатор слота
+#         start:
+#           type: string
+#           format: date-time
+#           description: Время начала слота
+#         end:
+#           type: string
+#           format: date-time
+#           description: Время окончания слота
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         status:
+#           type: string
+#           enum:
+#             - free
+#             - booked
+#             - cancelled
+#             - blocked
+#           description: Статус слота
+#         booking_id:
+#           type: string
+#           nullable: true
+#           description: Идентификатор бронирования (если слот забронирован)
+#         template_id:
+#           type: string
+#           nullable: true
+#           description: Идентификатор шаблона, из которого создан слот
 
-  /pullRequest/reassign:
-    post:
-      tags: [PullRequests]
-      summary: Переназначить конкретного ревьювера на другого из его команды
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id, old_user_id ]
-              properties:
-                pull_request_id: { type: string }
-                old_user_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-              old_reviewer_id: u2
-      responses:
-        '200':
-          description: Переназначение выполнено
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [pr, replaced_by]
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-                  replaced_by:
-                    type: string
-                    description: user_id нового ревьювера
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: OPEN
-                  assigned_reviewers: [u3, u5]
-                replaced_by: u5
-        '404':
-          description: PR или пользователь не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '409':
-          description: Нарушение доменных правил переназначения
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              examples:
-                merged:
-                  summary: Нельзя менять после MERGED
-                  value:
-                    error: { code: PR_MERGED, message: cannot reassign on merged PR }
-                notAssigned:
-                  summary: Пользователь не был назначен ревьювером
-                  value:
-                    error: { code: NOT_ASSIGNED, message: reviewer is not assigned to this PR }
-                noCandidate:
-                  summary: Нет доступных кандидатов
-                  value:
-                    error: { code: NO_CANDIDATE, message: no active replacement candidate in team }
+#     SlotGenerateRequest:
+#       type: object
+#       required:
+#         - from
+#         - to
+#       properties:
+#         template_id:
+#           type: string
+#           nullable: true
+#           description: Идентификатор шаблона доступности (если указан, генерируются слоты для этого шаблона)
+#         teacher_id:
+#           type: string
+#           nullable: true
+#           description: Идентификатор преподавателя (если указан, генерируются слоты для всех активных шаблонов преподавателя)
+#         from:
+#           type: string
+#           format: date
+#           example: "2024-01-01"
+#           description: Дата начала периода генерации
+#         to:
+#           type: string
+#           format: date
+#           example: "2024-01-31"
+#           description: Дата окончания периода генерации
 
-  /users/getReview:
-    get:
-      tags: [Users]
-      summary: Получить PR'ы, где пользователь назначен ревьювером
-      parameters:
-        - $ref: '#/components/parameters/UserIdQuery'
-      responses:
-        '200':
-          description: Список PR'ов пользователя
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ user_id, pull_requests ]
-                properties:
-                  user_id:
-                    type: string
-                  pull_requests:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PullRequestShort'
-              example:
-                user_id: u2
-                pull_requests:
-                  - pull_request_id: pr-1001
-                    pull_request_name: Add search
-                    author_id: u1
-                    status: OPENopenapi: 3.1.3
-info:
-  title: PR Reviewer Assignment Service (Test Task, Fall 2026)
-  version: "1.0.0"
+#     SlotGenerateResponse:
+#       type: object
+#       required:
+#         - job_id
+#       properties:
+#         job_id:
+#           type: string
+#           description: Идентификатор задачи генерации слотов
 
-tags:
-  - name: Teams
-  - name: Users
-  - name: PullRequests
-  - name: Health
+#     BookingRequest:
+#       type: object
+#       required:
+#         - slot_id
+#         - student_id
+#       properties:
+#         slot_id:
+#           type: string
+#           description: Идентификатор слота для бронирования
+#         student_id:
+#           type: string
+#           description: Идентификатор студента
 
-components:
-  parameters:
-    TeamNameQuery:
-      name: team_name
-      in: query
-      required: true
-      schema:
-        type: string
-      description: Уникальное имя команды
-    UserIdQuery:
-      name: user_id
-      in: query
-      required: true
-      schema:
-        type: string
-      description: Идентификатор пользователя
-  schemas:
-    ErrorResponse:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-              enum:
-                - TEAM_EXISTS
-                - PR_EXISTS
-                - PR_MERGED
-                - NOT_ASSIGNED
-                - NO_CANDIDATE
-                - NOT_FOUND
-            message:
-              type: string
-      example:
-        error:
-          code: NOT_FOUND
-          message: resource not found
-    TeamMember:
-      type: object
-      required: [ user_id, username, is_active ]
-      properties:
-        user_id:
-          type: string
-        username:
-          type: string
-        is_active:
-          type: boolean
-    Team:
-      type: object
-      required: [ team_name, members]
-      properties:
-        team_name:
-          type: string
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/TeamMember'
-    User:
-      type: object
-      required: [ user_id, username, team_name, is_active ]
-      properties:
-        user_id:
-          type: string
-        username:
-          type: string
-        team_name:
-          type: string
-        is_active:
-          type: boolean
-    PullRequest:
-      type: object
-      required: [ pull_request_id, pull_request_name, author_id, status, assigned_reviewers]
-      properties:
-        pull_request_id:
-          type: string
-        pull_request_name:
-          type: string
-        author_id:
-          type: string
-        status:
-          type: string
-          enum: [OPEN, MERGED]
-        assigned_reviewers:
-          type: array
-          items:
-            type: string
-          description: user_id назначенных ревьюверов (0..2)
-        createdAt:
-          type: string
-          format: date-time
-          nullable: true
-        mergedAt:
-          type: string
-          format: date-time
-          nullable: true
-    PullRequestShort:
-      type: object
-      required: [ pull_request_id, pull_request_name, author_id, status]
-      properties:
-        pull_request_id:
-          type: string
-        pull_request_name:
-          type: string
-        author_id:
-          type: string
-        status:
-          type: string
-          enum: [OPEN, MERGED]
+#     BookingResponse:
+#       type: object
+#       required:
+#         - id
+#         - slot_id
+#         - student_id
+#         - teacher_id
+#         - status
+#       properties:
+#         id:
+#           type: string
+#           description: Уникальный идентификатор бронирования
+#         slot_id:
+#           type: string
+#           description: Идентификатор слота
+#         student_id:
+#           type: string
+#           description: Идентификатор студента
+#         teacher_id:
+#           type: string
+#           description: Идентификатор преподавателя
+#         status:
+#           type: string
+#           enum:
+#             - pending
+#             - confirmed
+#             - cancelled
+#           description: Статус бронирования
 
-paths:
-  /team/add:
-    post:
-      tags: [Teams]
-      summary: Создать команду с участниками (создаёт/обновляет пользователей)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Team'
-            example:
-              team_name: payments
-              members:
-                - user_id: u1
-                  username: Alice
-                  is_active: true
-                - user_id: u2
-                  username: Bob
-                  is_active: true
-      responses:
-        '201':
-          description: Команда создана
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  team:
-                    $ref: '#/components/schemas/Team'
-              example:
-                team:
-                  team_name: backend
-                  members:
-                    - user_id: u1
-                      username: Alice
-                      is_active: true
-                    - user_id: u2
-                      username: Bob
-                      is_active: true
-        '400':
-          description: Команда уже существует
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example:
-                error:
-                  code: TEAM_EXISTS
-                  message: team_name already exists
+#     BookingRescheduleRequest:
+#       type: object
+#       required:
+#         - booking_id
+#         - new_slot_id
+#       properties:
+#         booking_id:
+#           type: string
+#           description: Идентификатор бронирования для переноса
+#         new_slot_id:
+#           type: string
+#           description: Идентификатор нового слота
 
-  /team/get:
-    get:
-      tags: [Teams]
-      summary: Получить команду с участниками
-      parameters:
-        - $ref: '#/components/parameters/TeamNameQuery'
-      responses:
-        '200':
-          description: Объект команды
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Team'
-              example:
-                team_name: backend
-                members:
-                  - user_id: u1
-                    username: Alice
-                    is_active: true
-                  - user_id: u2
-                    username: Bob
-                    is_active: true
-        '404':
-          description: Команда не найдена
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#     AttendanceRequest:
+#       type: object
+#       required:
+#         - booking_id
+#         - status
+#       properties:
+#         booking_id:
+#           type: string
+#           description: Идентификатор бронирования
+#         status:
+#           type: string
+#           enum:
+#             - present
+#             - absent
+#             - late
+#           description: Статус посещаемости
+#         notes:
+#           type: string
+#           description: Дополнительные заметки
 
-  /users/setIsActive:
-    post:
-      tags: [Users]
-      summary: Установить флаг активности пользователя
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ user_id, is_active ]
-              properties:
-                user_id:
-                  type: string
-                is_active:
-                  type: boolean
-            example:
-              user_id: u2
-              is_active: false
-      responses:
-        '200':
-          description: Обновлённый пользователь
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user:
-                    $ref: '#/components/schemas/User'
-              example:
-                user:
-                  user_id: u2
-                  username: Bob
-                  team_name: backend
-                  is_active: false
-        '404':
-          description: Пользователь не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#     AttendanceResponse:
+#       type: object
+#       required:
+#         - id
+#         - booking_id
+#         - status
+#         - notes
+#       properties:
+#         id:
+#           type: string
+#           description: Уникальный идентификатор записи посещаемости
+#         booking_id:
+#           type: string
+#           description: Идентификатор бронирования
+#         status:
+#           type: string
+#           enum:
+#             - present
+#             - absent
+#             - late
+#           description: Статус посещаемости
+#         notes:
+#           type: string
+#           description: Дополнительные заметки
 
-  /pullRequest/create:
-    post:
-      tags: [PullRequests]
-      summary: Создать PR и автоматически назначить до 2 ревьюверов из команды автора
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id, pull_request_name, author_id ]
-              properties:
-                pull_request_id: { type: string }
-                pull_request_name: { type: string }
-                author_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-              pull_request_name: Add search
-              author_id: u1
-      responses:
-        '201':
-          description: PR создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: OPEN
-                  assigned_reviewers: [u2, u3]
-        '404':
-          description: Автор/команда не найдены
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '409':
-          description: PR уже существует
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example:
-                error: { code: PR_EXISTS, message: PR id already exists }
+#   parameters:
+#     IdPath:
+#       name: id
+#       in: path
+#       required: true
+#       schema:
+#         type: string
+#       description: Уникальный идентификатор ресурса
+#     TeacherIdQuery:
+#       name: teacher_id
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Идентификатор преподавателя
+#     StudentIdQuery:
+#       name: student_id
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Идентификатор студента
+#     FromQuery:
+#       name: from
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#         format: date-time
+#       description: Начало периода (RFC3339 или YYYY-MM-DD)
+#     ToQuery:
+#       name: to
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#         format: date-time
+#       description: Конец периода (RFC3339 или YYYY-MM-DD)
+#     StatusQuery:
+#       name: status
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Фильтр по статусу
+#     DurationQuery:
+#       name: duration
+#       in: query
+#       required: false
+#       schema:
+#         type: integer
+#       description: Длительность в минутах
+#     PageQuery:
+#       name: page
+#       in: query
+#       required: false
+#       schema:
+#         type: integer
+#         minimum: 1
+#       description: Номер страницы
+#     PerPageQuery:
+#       name: per_page
+#       in: query
+#       required: false
+#       schema:
+#         type: integer
+#         minimum: 1
+#         maximum: 100
+#       description: Количество элементов на странице
+#     SortQuery:
+#       name: sort
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Поле для сортировки
+#     QQuery:
+#       name: q
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Поисковый запрос
+#     IdsQuery:
+#       name: ids
+#       in: query
+#       required: false
+#       schema:
+#         type: string
+#       description: Список идентификаторов через запятую
 
-  /pullRequest/merge:
-    post:
-      tags: [PullRequests]
-      summary: Пометить PR как MERGED (идемпотентная операция)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id ]
-              properties:
-                pull_request_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-      responses:
-        '200':
-          description: PR в состоянии MERGED
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: MERGED
-                  assigned_reviewers: [u2, u3]
-                  mergedAt: 2025-10-24T12:34:56Z
-        '404':
-          description: PR не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
+#   headers:
+#     IdempotencyKey:
+#       name: Idempotency-Key
+#       in: header
+#       required: false
+#       schema:
+#         type: string
+#       description: Ключ идемпотентности для предотвращения дублирования запросов
 
-  /pullRequest/reassign:
-    post:
-      tags: [PullRequests]
-      summary: Переназначить конкретного ревьювера на другого из его команды
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ pull_request_id, old_user_id ]
-              properties:
-                pull_request_id: { type: string }
-                old_user_id: { type: string }
-            example:
-              pull_request_id: pr-1001
-              old_reviewer_id: u2
-      responses:
-        '200':
-          description: Переназначение выполнено
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [pr, replaced_by]
-                properties:
-                  pr:
-                    $ref: '#/components/schemas/PullRequest'
-                  replaced_by:
-                    type: string
-                    description: user_id нового ревьювера
-              example:
-                pr:
-                  pull_request_id: pr-1001
-                  pull_request_name: Add search
-                  author_id: u1
-                  status: OPEN
-                  assigned_reviewers: [u3, u5]
-                replaced_by: u5
-        '404':
-          description: PR или пользователь не найден
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '409':
-          description: Нарушение доменных правил переназначения
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              examples:
-                merged:
-                  summary: Нельзя менять после MERGED
-                  value:
-                    error: { code: PR_MERGED, message: cannot reassign on merged PR }
-                notAssigned:
-                  summary: Пользователь не был назначен ревьювером
-                  value:
-                    error: { code: NOT_ASSIGNED, message: reviewer is not assigned to this PR }
-                noCandidate:
-                  summary: Нет доступных кандидатов
-                  value:
-                    error: { code: NO_CANDIDATE, message: no active replacement candidate in team }
+# paths:
+#   /availability_templates:
+#     post:
+#       tags:
+#         - Availability Templates
+#       summary: Создать шаблон доступности
+#       description: Создает новый шаблон доступности для преподавателя
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/AvailabilityTemplateRequest'
+#             example:
+#               teacher_id: "teacher-123"
+#               recurrence:
+#                 days:
+#                   - monday
+#                   - wednesday
+#                   - friday
+#                 start_time: "09:00"
+#                 end_time: "18:00"
+#               slot_duration_minutes: 60
+#               start_date: "2024-01-01"
+#               end_date: "2024-12-31"
+#               enabled: true
+#       responses:
+#         '201':
+#           description: Шаблон успешно создан
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   template:
+#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
+#               example:
+#                 template:
+#                   id: "template-123"
+#                   teacher_id: "teacher-123"
+#                   recurrence:
+#                     days:
+#                       - monday
+#                       - wednesday
+#                       - friday
+#                     start_time: "09:00"
+#                     end_time: "18:00"
+#                   slot_duration_minutes: 60
+#                   start_date: "2024-01-01"
+#                   end_date: "2024-12-31"
+#                   enabled: true
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Ресурс не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
 
-  /users/getReview:
-    get:
-      tags: [Users]
-      summary: Получить PR'ы, где пользователь назначен ревьювером
-      parameters:
-        - $ref: '#/components/parameters/UserIdQuery'
-      responses:
-        '200':
-          description: Список PR'ов пользователя
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ user_id, pull_requests ]
-                properties:
-                  user_id:
-                    type: string
-                  pull_requests:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PullRequestShort'
-              example:
-                user_id: u2
-                pull_requests:
-                  - pull_request_id: pr-1001
-                    pull_request_name: Add search
-                    author_id: u1
-                    status: OPEN
+#   /availability_templates/{id}:
+#     get:
+#       tags:
+#         - Availability Templates
+#       summary: Получить шаблон доступности
+#       description: Возвращает информацию о шаблоне доступности по идентификатору
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '200':
+#           description: Шаблон найден
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   template:
+#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Шаблон не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#     put:
+#       tags:
+#         - Availability Templates
+#       summary: Обновить шаблон доступности
+#       description: Обновляет существующий шаблон доступности
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/AvailabilityTemplateRequest'
+#       responses:
+#         '200':
+#           description: Шаблон успешно обновлен
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   template:
+#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Шаблон не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#     delete:
+#       tags:
+#         - Availability Templates
+#       summary: Удалить шаблон доступности
+#       description: Удаляет шаблон доступности
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '204':
+#           description: Шаблон успешно удален
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Шаблон не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /time_blocks:
+#     post:
+#       tags:
+#         - Time Blocks
+#       summary: Создать блок времени
+#       description: Создает новый блок времени (отпуск, больничный и т.д.)
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/TimeBlockRequest'
+#             example:
+#               teacher_id: "teacher-123"
+#               start: "2024-01-15T00:00:00Z"
+#               end: "2024-01-20T23:59:59Z"
+#               reason: "Отпуск"
+#               type: "vacation"
+#       responses:
+#         '201':
+#           description: Блок времени успешно создан
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   time_block:
+#                     $ref: '#/components/schemas/TimeBlockResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Ресурс не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /time_blocks/{id}:
+#     get:
+#       tags:
+#         - Time Blocks
+#       summary: Получить блок времени
+#       description: Возвращает информацию о блоке времени по идентификатору
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '200':
+#           description: Блок времени найден
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   time_block:
+#                     $ref: '#/components/schemas/TimeBlockResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Блок времени не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#     put:
+#       tags:
+#         - Time Blocks
+#       summary: Обновить блок времени
+#       description: Обновляет существующий блок времени
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/TimeBlockRequest'
+#       responses:
+#         '200':
+#           description: Блок времени успешно обновлен
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   time_block:
+#                     $ref: '#/components/schemas/TimeBlockResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Блок времени не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#     delete:
+#       tags:
+#         - Time Blocks
+#       summary: Удалить блок времени
+#       description: Удаляет блок времени
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '204':
+#           description: Блок времени успешно удален
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Блок времени не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /time_blocks:
+#     get:
+#       tags:
+#         - Time Blocks
+#       summary: Список блоков времени
+#       description: Возвращает список блоков времени с возможностью фильтрации
+#       parameters:
+#         - $ref: '#/components/parameters/TeacherIdQuery'
+#         - $ref: '#/components/parameters/FromQuery'
+#         - $ref: '#/components/parameters/ToQuery'
+#       responses:
+#         '200':
+#           description: Список блоков времени
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   time_blocks:
+#                     type: array
+#                     items:
+#                       $ref: '#/components/schemas/TimeBlockResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /slots/{id}:
+#     get:
+#       tags:
+#         - Slots
+#       summary: Получить слот
+#       description: Возвращает информацию о слоте по идентификатору
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '200':
+#           description: Слот найден
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   slot:
+#                     $ref: '#/components/schemas/SlotResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Слот не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /slots:
+#     get:
+#       tags:
+#         - Slots
+#       summary: Список слотов
+#       description: Возвращает список слотов с возможностью фильтрации и пагинации
+#       parameters:
+#         - $ref: '#/components/parameters/TeacherIdQuery'
+#         - name: from
+#           in: query
+#           required: false
+#           schema:
+#             type: string
+#             format: date
+#           description: Начало периода (YYYY-MM-DD или RFC3339)
+#         - name: to
+#           in: query
+#           required: false
+#           schema:
+#             type: string
+#             format: date
+#           description: Конец периода (YYYY-MM-DD или RFC3339)
+#         - $ref: '#/components/parameters/DurationQuery'
+#         - $ref: '#/components/parameters/StatusQuery'
+#         - $ref: '#/components/parameters/QQuery'
+#         - $ref: '#/components/parameters/PageQuery'
+#         - $ref: '#/components/parameters/PerPageQuery'
+#         - $ref: '#/components/parameters/SortQuery'
+#       responses:
+#         '200':
+#           description: Список слотов
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   slots:
+#                     type: array
+#                     items:
+#                       $ref: '#/components/schemas/SlotResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /slots/batch:
+#     get:
+#       tags:
+#         - Slots
+#       summary: Получить слоты по идентификаторам
+#       description: Возвращает список слотов по переданным идентификаторам
+#       parameters:
+#         - $ref: '#/components/parameters/IdsQuery'
+#       responses:
+#         '200':
+#           description: Список слотов
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   slots:
+#                     type: array
+#                     items:
+#                       $ref: '#/components/schemas/SlotResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /slots/generate:
+#     post:
+#       tags:
+#         - Slots
+#       summary: Генерировать слоты
+#       description: Запускает асинхронную генерацию слотов на основе шаблонов доступности
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/SlotGenerateRequest'
+#             example:
+#               template_id: "template-123"
+#               from: "2024-01-01"
+#               to: "2024-01-31"
+#       responses:
+#         '202':
+#           description: Генерация слотов запущена
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/SlotGenerateResponse'
+#               example:
+#                 job_id: "job-123"
+#         '400':
+#           description: Неверный запрос (требуется template_id или teacher_id)
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /bookings:
+#     post:
+#       tags:
+#         - Bookings
+#       summary: Создать бронирование
+#       description: Создает новое бронирование слота для студента. Поддерживает идемпотентность через заголовок Idempotency-Key
+#       parameters:
+#         - $ref: '#/components/headers/IdempotencyKey'
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/BookingRequest'
+#             example:
+#               slot_id: "slot-123"
+#               student_id: "student-456"
+#       responses:
+#         '201':
+#           description: Бронирование успешно создано
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   booking:
+#                     $ref: '#/components/schemas/BookingResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Ресурс не найден
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '409':
+#           description: Слот недоступен для бронирования
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#               example:
+#                 error:
+#                   code: SLOT_NOT_AVAILABLE
+#                   message: slot is not available
+#         '423':
+#           description: Ресурс заблокирован
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#               example:
+#                 error:
+#                   code: LOCKED
+#                   message: resource is locked
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /bookings/{id}:
+#     get:
+#       tags:
+#         - Bookings
+#       summary: Получить бронирование
+#       description: Возвращает информацию о бронировании по идентификатору
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '200':
+#           description: Бронирование найдено
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   booking:
+#                     $ref: '#/components/schemas/BookingResponse'
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Бронирование не найдено
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#     delete:
+#       tags:
+#         - Bookings
+#       summary: Удалить бронирование
+#       description: Удаляет бронирование
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '204':
+#           description: Бронирование успешно удалено
+#         '400':
+#           description: Неверный запрос
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '404':
+#           description: Бронирование не найдено
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /bookings:
+#     get:
+#       tags:
+#         - Bookings
+#       summary: Список бронирований
+#       description: Возвращает список бронирований с возможностью фильтрации
+#       parameters:
+#         - $ref: '#/components/parameters/StudentIdQuery'
+#         - $ref: '#/components/parameters/TeacherIdQuery'
+#         - $ref: '#/components/parameters/FromQuery'
+#         - $ref: '#/components/parameters/ToQuery'
+#         - $ref: '#/components/parameters/StatusQuery'
+#       responses:
+#         '200':
+#           description: Список бронирований
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   bookings:
+#                     type: array
+#                     items:
+#                       $ref: '#/components/schemas/BookingResponse'
+#         '500':
+#           description: Внутренняя ошибка сервера
+#           content:
+#             application/json:
+#               schema:
+#                 $ref: '#/components/schemas/ErrorResponse'
+
+#   /bookings/{id}/cancel:
+#     put:
+#       tags:
+#         - Bookings
+#       summary: Отменить бронирование
+#       description: Отменяет существующее бронирование
+#       parameters:
+#         - $ref: '#/components/parameters/IdPath'
+#       responses:
+#         '200':
+#           description: Бронирование успешно отменено
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+            
