@@ -400,13 +400,13 @@ func (s *Storage) ListSlots(ctx context.Context, filters interface{}) ([]*models
 		}
 
 		if f.From != nil {
-			query += fmt.Sprintf(" AND start >= $%d", argPos)
+			query += fmt.Sprintf(" AND starts_at >= $%d", argPos)
 			args = append(args, *f.From)
 			argPos++
 		}
 
 		if f.To != nil {
-			query += fmt.Sprintf(" AND \"end\" <= $%d", argPos)
+			query += fmt.Sprintf(" AND ends_at <= $%d", argPos)
 			args = append(args, *f.To)
 			argPos++
 		}
@@ -418,25 +418,55 @@ func (s *Storage) ListSlots(ctx context.Context, filters interface{}) ([]*models
 		}
 
 		if f.Duration != nil {
-			query += fmt.Sprintf(" AND EXTRACT(EPOCH FROM (\"end\" - start))/60 = $%d", argPos)
+			query += fmt.Sprintf(" AND EXTRACT(EPOCH FROM (ends_at - starts_at))/60 = $%d", argPos)
 			args = append(args, *f.Duration)
 			argPos++
 		}
 
-		// Sort
-		sortBy := "start"
-		if f.Sort != nil {
-			sortBy = *f.Sort
+		if f.Q != nil && *f.Q != "" {
+			query += fmt.Sprintf(" AND (teacher_id ILIKE $%d OR id::text ILIKE $%d)", argPos, argPos)
+			searchPattern := "%" + *f.Q + "%"
+			args = append(args, searchPattern, searchPattern)
+			argPos += 2
+		}
+
+		// Sort - валидация для предотвращения SQL injection
+		sortBy := "starts_at"
+		if f.Sort != nil && *f.Sort != "" {
+			allowedSortFields := map[string]bool{
+				"starts_at":  true,
+				"ends_at":    true,
+				"status":     true,
+				"teacher_id": true,
+				"created_at": true,
+			}
+			if allowedSortFields[*f.Sort] {
+				sortBy = *f.Sort
+			}
 		}
 		query += fmt.Sprintf(" ORDER BY %s", sortBy)
 
+		// Применяем пагинацию, если указаны page и per_page
 		if f.Page != nil && f.PerPage != nil {
-			offset := (*f.Page - 1) * *f.PerPage
+			page := *f.Page
+			perPage := *f.PerPage
+			// Валидация значений
+			if page < 1 {
+				page = 1
+			}
+			if perPage < 1 {
+				perPage = 20
+			}
+			if perPage > 100 {
+				perPage = 100
+			}
+			offset := (page - 1) * perPage
 			query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argPos, argPos+1)
-			args = append(args, *f.PerPage, offset)
+			args = append(args, perPage, offset)
 		}
 	} else {
-		query += " ORDER BY start"
+		// Если фильтры не указаны, применяем дефолтные значения
+		query += " ORDER BY starts_at LIMIT 20 OFFSET 0"
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

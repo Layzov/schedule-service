@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS slots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_slots_teacher_id ON slots (teacher_id);
-CREATE INDEX IF NOT EXISTS idx_slots_dates ON slots (start, "end");
+CREATE INDEX IF NOT EXISTS idx_slots_dates ON slots (starts_at, ends_at);
 CREATE INDEX IF NOT EXISTS idx_slots_status ON slots (status);
 CREATE INDEX IF NOT EXISTS idx_slots_booking_id ON slots (booking_id);
 CREATE INDEX IF NOT EXISTS idx_slots_template_id ON slots (template_id);
@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings (status);
 -- Attendance
 CREATE TABLE IF NOT EXISTS attendance (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE RESTRICT,
+    booking_id UUID UNIQUE NOT NULL REFERENCES bookings(id) ON DELETE RESTRICT,
     status TEXT NOT NULL CHECK (status IN ('present', 'absent', 'late')),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

@@ -1,1181 +1,1500 @@
-# openapi: 3.0.3
+openapi: 3.0.3
 
-# info:
-#   title: RASP Service API
-#   description: API для управления расписанием занятий, бронированиями и посещаемостью
-#   version: "1.0.0"
-#   contact:
-#     name: API Support
+info:
+  title: RASP Service API
+  description: API для управления расписанием занятий, бронированиями и посещаемостью
+  version: "1.0.0"
+  contact:
+    name: API Support
 
-# servers:
-#   - url: http://localhost:8080
-#     description: Локальный сервер разработки
+servers:
+  - url: http://localhost:8080
+    description: Локальный сервер разработки
 
-# tags:
-#   - name: Availability Templates
-#     description: Управление шаблонами доступности преподавателей
-#   - name: Time Blocks
-#     description: Управление блоками времени (отпуска, больничные и т.д.)
-#   - name: Slots
-#     description: Управление временными слотами для занятий
-#   - name: Bookings
-#     description: Управление бронированиями занятий
-#   - name: Attendance
-#     description: Управление посещаемостью занятий
+tags:
+  - name: Availability Templates
+    description: Управление шаблонами доступности преподавателей
+  - name: Time Blocks
+    description: Управление блоками времени (отпуска, больничные и т.д.)
+  - name: Slots
+    description: Управление временными слотами для занятий
+  - name: Bookings
+    description: Управление бронированиями занятий
+  - name: Attendance
+    description: Управление посещаемостью занятий
 
-# components:
-#   schemas:
-#     ErrorResponse:
-#       type: object
-#       required:
-#         - error
-#       properties:
-#         error:
-#           type: object
-#           required:
-#             - code
-#             - message
-#           properties:
-#             code:
-#               type: string
-#               enum:
-#                 - REQUEST_FAILED
-#                 - FAILED_TO_DECODE
-#                 - NOT_FOUND
-#                 - LOCKED
-#                 - CONFLICT
-#                 - SLOT_NOT_AVAILABLE
-#             message:
-#               type: string
-#       example:
-#         error:
-#           code: NOT_FOUND
-#           message: resource not found
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - REQUEST_FAILED
+                - FAILED_TO_DECODE
+                - NOT_FOUND
+                - LOCKED
+                - CONFLICT
+                - SLOT_NOT_AVAILABLE
+            message:
+              type: string
+      example:
+        error:
+          code: NOT_FOUND
+          message: resource not found
 
-#     RecurrenceConfig:
-#       type: object
-#       required:
-#         - days
-#         - start_time
-#         - end_time
-#       properties:
-#         days:
-#           type: array
-#           items:
-#             type: string
-#             enum:
-#               - monday
-#               - tuesday
-#               - wednesday
-#               - thursday
-#               - friday
-#               - saturday
-#               - sunday
-#           description: Дни недели, когда доступен преподаватель
-#         start_time:
-#           type: string
-#           format: time
-#           example: "09:00"
-#           description: Время начала доступности (формат HH:MM)
-#         end_time:
-#           type: string
-#           format: time
-#           example: "18:00"
-#           description: Время окончания доступности (формат HH:MM)
+    RecurrenceConfig:
+      type: object
+      required:
+        - days
+        - start_time
+        - end_time
+      properties:
+        days:
+          type: array
+          items:
+            type: string
+            enum:
+              - monday
+              - tuesday
+              - wednesday
+              - thursday
+              - friday
+              - saturday
+              - sunday
+          description: Дни недели, когда доступен преподаватель
+        start_time:
+          type: string
+          format: time
+          example: "09:00"
+          description: Время начала доступности (формат HH:MM)
+        end_time:
+          type: string
+          format: time
+          example: "18:00"
+          description: Время окончания доступности (формат HH:MM)
 
-#     AvailabilityTemplateRequest:
-#       type: object
-#       required:
-#         - teacher_id
-#         - recurrence
-#         - slot_duration_minutes
-#         - start_date
-#         - end_date
-#         - enabled
-#       properties:
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         recurrence:
-#           $ref: '#/components/schemas/RecurrenceConfig'
-#         slot_duration_minutes:
-#           type: integer
-#           minimum: 1
-#           description: Длительность слота в минутах
-#         start_date:
-#           type: string
-#           format: date
-#           example: "2024-01-01"
-#           description: Дата начала действия шаблона
-#         end_date:
-#           type: string
-#           format: date
-#           example: "2024-12-31"
-#           description: Дата окончания действия шаблона
-#         enabled:
-#           type: boolean
-#           description: Включен ли шаблон
+    AvailabilityTemplateRequest:
+      type: object
+      required:
+        - teacher_id
+        - recurrence
+        - slot_duration_minutes
+        - start_date
+        - end_date
+        - enabled
+      properties:
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceConfig'
+        slot_duration_minutes:
+          type: integer
+          minimum: 1
+          description: Длительность слота в минутах
+        start_date:
+          type: string
+          format: date
+          example: "2024-01-01"
+          description: Дата начала действия шаблона
+        end_date:
+          type: string
+          format: date
+          example: "2024-12-31"
+          description: Дата окончания действия шаблона
+        enabled:
+          type: boolean
+          description: Включен ли шаблон
 
-#     AvailabilityTemplateResponse:
-#       type: object
-#       required:
-#         - id
-#         - teacher_id
-#         - recurrence
-#         - slot_duration_minutes
-#         - start_date
-#         - end_date
-#         - enabled
-#       properties:
-#         id:
-#           type: string
-#           description: Уникальный идентификатор шаблона
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         recurrence:
-#           $ref: '#/components/schemas/RecurrenceConfig'
-#         slot_duration_minutes:
-#           type: integer
-#           minimum: 1
-#           description: Длительность слота в минутах
-#         start_date:
-#           type: string
-#           format: date
-#           description: Дата начала действия шаблона
-#         end_date:
-#           type: string
-#           format: date
-#           description: Дата окончания действия шаблона
-#         enabled:
-#           type: boolean
-#           description: Включен ли шаблон
+    AvailabilityTemplateResponse:
+      type: object
+      required:
+        - id
+        - teacher_id
+        - recurrence
+        - slot_duration_minutes
+        - start_date
+        - end_date
+        - enabled
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор шаблона
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceConfig'
+        slot_duration_minutes:
+          type: integer
+          minimum: 1
+          description: Длительность слота в минутах
+        start_date:
+          type: string
+          format: date
+          description: Дата начала действия шаблона
+        end_date:
+          type: string
+          format: date
+          description: Дата окончания действия шаблона
+        enabled:
+          type: boolean
+          description: Включен ли шаблон
 
-#     TimeBlockRequest:
-#       type: object
-#       required:
-#         - teacher_id
-#         - start
-#         - end
-#         - reason
-#         - type
-#       properties:
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         start:
-#           type: string
-#           format: date-time
-#           example: "2024-01-15T00:00:00Z"
-#           description: Время начала блока
-#         end:
-#           type: string
-#           format: date-time
-#           example: "2024-01-20T23:59:59Z"
-#           description: Время окончания блока
-#         reason:
-#           type: string
-#           description: Причина блокировки времени
-#         type:
-#           type: string
-#           enum:
-#             - vacation
-#             - sick
-#             - other
-#           description: Тип блока времени
+    TimeBlockRequest:
+      type: object
+      required:
+        - teacher_id
+        - start
+        - end
+        - reason
+        - type
+      properties:
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        start:
+          type: string
+          format: date-time
+          example: "2024-01-15T00:00:00Z"
+          description: Время начала блока
+        end:
+          type: string
+          format: date-time
+          example: "2024-01-20T23:59:59Z"
+          description: Время окончания блока
+        reason:
+          type: string
+          description: Причина блокировки времени
+        type:
+          type: string
+          enum:
+            - vacation
+            - sick
+            - other
+          description: Тип блока времени
 
-#     TimeBlockResponse:
-#       type: object
-#       required:
-#         - id
-#         - teacher_id
-#         - start
-#         - end
-#         - reason
-#         - type
-#       properties:
-#         id:
-#           type: string
-#           description: Уникальный идентификатор блока времени
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         start:
-#           type: string
-#           format: date-time
-#           description: Время начала блока
-#         end:
-#           type: string
-#           format: date-time
-#           description: Время окончания блока
-#         reason:
-#           type: string
-#           description: Причина блокировки времени
-#         type:
-#           type: string
-#           enum:
-#             - vacation
-#             - sick
-#             - other
-#           description: Тип блока времени
+    TimeBlockResponse:
+      type: object
+      required:
+        - id
+        - teacher_id
+        - start
+        - end
+        - reason
+        - type
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор блока времени
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        start:
+          type: string
+          format: date-time
+          description: Время начала блока
+        end:
+          type: string
+          format: date-time
+          description: Время окончания блока
+        reason:
+          type: string
+          description: Причина блокировки времени
+        type:
+          type: string
+          enum:
+            - vacation
+            - sick
+            - other
+          description: Тип блока времени
 
-#     SlotResponse:
-#       type: object
-#       required:
-#         - id
-#         - start
-#         - end
-#         - teacher_id
-#         - status
-#       properties:
-#         id:
-#           type: string
-#           description: Уникальный идентификатор слота
-#         start:
-#           type: string
-#           format: date-time
-#           description: Время начала слота
-#         end:
-#           type: string
-#           format: date-time
-#           description: Время окончания слота
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         status:
-#           type: string
-#           enum:
-#             - free
-#             - booked
-#             - cancelled
-#             - blocked
-#           description: Статус слота
-#         booking_id:
-#           type: string
-#           nullable: true
-#           description: Идентификатор бронирования (если слот забронирован)
-#         template_id:
-#           type: string
-#           nullable: true
-#           description: Идентификатор шаблона, из которого создан слот
+    SlotResponse:
+      type: object
+      required:
+        - id
+        - start
+        - end
+        - teacher_id
+        - status
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор слота
+        start:
+          type: string
+          format: date-time
+          description: Время начала слота
+        end:
+          type: string
+          format: date-time
+          description: Время окончания слота
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        status:
+          type: string
+          enum:
+            - free
+            - booked
+            - cancelled
+            - blocked
+          description: Статус слота
+        booking_id:
+          type: string
+          nullable: true
+          description: Идентификатор бронирования (если слот забронирован)
+        template_id:
+          type: string
+          nullable: true
+          description: Идентификатор шаблона, из которого создан слот
 
-#     SlotGenerateRequest:
-#       type: object
-#       required:
-#         - from
-#         - to
-#       properties:
-#         template_id:
-#           type: string
-#           nullable: true
-#           description: Идентификатор шаблона доступности (если указан, генерируются слоты для этого шаблона)
-#         teacher_id:
-#           type: string
-#           nullable: true
-#           description: Идентификатор преподавателя (если указан, генерируются слоты для всех активных шаблонов преподавателя)
-#         from:
-#           type: string
-#           format: date
-#           example: "2024-01-01"
-#           description: Дата начала периода генерации
-#         to:
-#           type: string
-#           format: date
-#           example: "2024-01-31"
-#           description: Дата окончания периода генерации
+    SlotGenerateRequest:
+      type: object
+      required:
+        - from
+        - to
+      properties:
+        template_id:
+          type: string
+          nullable: true
+          description: Идентификатор шаблона доступности (если указан, генерируются слоты для этого шаблона)
+        teacher_id:
+          type: string
+          nullable: true
+          description: Идентификатор преподавателя (если указан, генерируются слоты для всех активных шаблонов преподавателя)
+        from:
+          type: string
+          format: date
+          example: "2024-01-01"
+          description: Дата начала периода генерации
+        to:
+          type: string
+          format: date
+          example: "2024-01-31"
+          description: Дата окончания периода генерации
 
-#     SlotGenerateResponse:
-#       type: object
-#       required:
-#         - job_id
-#       properties:
-#         job_id:
-#           type: string
-#           description: Идентификатор задачи генерации слотов
+    SlotGenerateResponse:
+      type: object
+      required:
+        - job_id
+      properties:
+        job_id:
+          type: string
+          description: Идентификатор задачи генерации слотов
 
-#     BookingRequest:
-#       type: object
-#       required:
-#         - slot_id
-#         - student_id
-#       properties:
-#         slot_id:
-#           type: string
-#           description: Идентификатор слота для бронирования
-#         student_id:
-#           type: string
-#           description: Идентификатор студента
+    BookingRequest:
+      type: object
+      required:
+        - slot_id
+        - student_id
+      properties:
+        slot_id:
+          type: string
+          description: Идентификатор слота для бронирования
+        student_id:
+          type: string
+          description: Идентификатор студента
 
-#     BookingResponse:
-#       type: object
-#       required:
-#         - id
-#         - slot_id
-#         - student_id
-#         - teacher_id
-#         - status
-#       properties:
-#         id:
-#           type: string
-#           description: Уникальный идентификатор бронирования
-#         slot_id:
-#           type: string
-#           description: Идентификатор слота
-#         student_id:
-#           type: string
-#           description: Идентификатор студента
-#         teacher_id:
-#           type: string
-#           description: Идентификатор преподавателя
-#         status:
-#           type: string
-#           enum:
-#             - pending
-#             - confirmed
-#             - cancelled
-#           description: Статус бронирования
+    BookingResponse:
+      type: object
+      required:
+        - id
+        - slot_id
+        - student_id
+        - teacher_id
+        - status
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор бронирования
+        slot_id:
+          type: string
+          description: Идентификатор слота
+        student_id:
+          type: string
+          description: Идентификатор студента
+        teacher_id:
+          type: string
+          description: Идентификатор преподавателя
+        status:
+          type: string
+          enum:
+            - pending
+            - confirmed
+            - cancelled
+          description: Статус бронирования
 
-#     BookingRescheduleRequest:
-#       type: object
-#       required:
-#         - booking_id
-#         - new_slot_id
-#       properties:
-#         booking_id:
-#           type: string
-#           description: Идентификатор бронирования для переноса
-#         new_slot_id:
-#           type: string
-#           description: Идентификатор нового слота
+    BookingRescheduleRequest:
+      type: object
+      required:
+        - booking_id
+        - new_slot_id
+      properties:
+        booking_id:
+          type: string
+          description: Идентификатор бронирования для переноса
+        new_slot_id:
+          type: string
+          description: Идентификатор нового слота
 
-#     AttendanceRequest:
-#       type: object
-#       required:
-#         - booking_id
-#         - status
-#       properties:
-#         booking_id:
-#           type: string
-#           description: Идентификатор бронирования
-#         status:
-#           type: string
-#           enum:
-#             - present
-#             - absent
-#             - late
-#           description: Статус посещаемости
-#         notes:
-#           type: string
-#           description: Дополнительные заметки
+    AttendanceRequest:
+      type: object
+      required:
+        - booking_id
+        - status
+      properties:
+        booking_id:
+          type: string
+          description: Идентификатор бронирования
+        status:
+          type: string
+          enum:
+            - present
+            - absent
+            - late
+          description: Статус посещаемости
+        notes:
+          type: string
+          description: Дополнительные заметки
 
-#     AttendanceResponse:
-#       type: object
-#       required:
-#         - id
-#         - booking_id
-#         - status
-#         - notes
-#       properties:
-#         id:
-#           type: string
-#           description: Уникальный идентификатор записи посещаемости
-#         booking_id:
-#           type: string
-#           description: Идентификатор бронирования
-#         status:
-#           type: string
-#           enum:
-#             - present
-#             - absent
-#             - late
-#           description: Статус посещаемости
-#         notes:
-#           type: string
-#           description: Дополнительные заметки
+    AttendanceResponse:
+      type: object
+      required:
+        - id
+        - booking_id
+        - status
+        - notes
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор записи посещаемости
+        booking_id:
+          type: string
+          description: Идентификатор бронирования
+        status:
+          type: string
+          enum:
+            - present
+            - absent
+            - late
+          description: Статус посещаемости
+        notes:
+          type: string
+          description: Дополнительные заметки
 
-#   parameters:
-#     IdPath:
-#       name: id
-#       in: path
-#       required: true
-#       schema:
-#         type: string
-#       description: Уникальный идентификатор ресурса
-#     TeacherIdQuery:
-#       name: teacher_id
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Идентификатор преподавателя
-#     StudentIdQuery:
-#       name: student_id
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Идентификатор студента
-#     FromQuery:
-#       name: from
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#         format: date-time
-#       description: Начало периода (RFC3339 или YYYY-MM-DD)
-#     ToQuery:
-#       name: to
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#         format: date-time
-#       description: Конец периода (RFC3339 или YYYY-MM-DD)
-#     StatusQuery:
-#       name: status
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Фильтр по статусу
-#     DurationQuery:
-#       name: duration
-#       in: query
-#       required: false
-#       schema:
-#         type: integer
-#       description: Длительность в минутах
-#     PageQuery:
-#       name: page
-#       in: query
-#       required: false
-#       schema:
-#         type: integer
-#         minimum: 1
-#       description: Номер страницы
-#     PerPageQuery:
-#       name: per_page
-#       in: query
-#       required: false
-#       schema:
-#         type: integer
-#         minimum: 1
-#         maximum: 100
-#       description: Количество элементов на странице
-#     SortQuery:
-#       name: sort
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Поле для сортировки
-#     QQuery:
-#       name: q
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Поисковый запрос
-#     IdsQuery:
-#       name: ids
-#       in: query
-#       required: false
-#       schema:
-#         type: string
-#       description: Список идентификаторов через запятую
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Уникальный идентификатор ресурса
+    TeacherIdQuery:
+      name: teacher_id
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Идентификатор преподавателя
+    StudentIdQuery:
+      name: student_id
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Идентификатор студента
+    FromQuery:
+      name: from
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Начало периода (RFC3339 или YYYY-MM-DD)
+    ToQuery:
+      name: to
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Конец периода (RFC3339 или YYYY-MM-DD)
+    StatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Фильтр по статусу
+    DurationQuery:
+      name: duration
+      in: query
+      required: false
+      schema:
+        type: integer
+      description: Длительность в минутах
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+      description: Номер страницы
+    PerPageQuery:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+      description: Количество элементов на странице
+    SortQuery:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Поле для сортировки
+    QQuery:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Поисковый запрос
+    IdsQuery:
+      name: ids
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Список идентификаторов через запятую
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Ключ идемпотентности для предотвращения дублирования запросов
 
-#   headers:
-#     IdempotencyKey:
-#       name: Idempotency-Key
-#       in: header
-#       required: false
-#       schema:
-#         type: string
-#       description: Ключ идемпотентности для предотвращения дублирования запросов
+paths:
+  /availability_templates:
+    post:
+      tags:
+        - Availability Templates
+      summary: Создать шаблон доступности
+      description: Создает новый шаблон доступности для преподавателя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityTemplateRequest'
+            example:
+              teacher_id: "teacher-123"
+              recurrence:
+                days:
+                  - monday
+                  - wednesday
+                  - friday
+                start_time: "09:00"
+                end_time: "18:00"
+              slot_duration_minutes: 60
+              start_date: "2024-01-01"
+              end_date: "2024-12-31"
+              enabled: true
+      responses:
+        '201':
+          description: Шаблон успешно создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template:
+                    $ref: '#/components/schemas/AvailabilityTemplateResponse'
+              example:
+                template:
+                  id: "template-123"
+                  teacher_id: "teacher-123"
+                  recurrence:
+                    days:
+                      - monday
+                      - wednesday
+                      - friday
+                    start_time: "09:00"
+                    end_time: "18:00"
+                  slot_duration_minutes: 60
+                  start_date: "2024-01-01"
+                  end_date: "2024-12-31"
+                  enabled: true
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: failed to decode request
+        '404':
+          description: Ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to create availability template
 
-# paths:
-#   /availability_templates:
-#     post:
-#       tags:
-#         - Availability Templates
-#       summary: Создать шаблон доступности
-#       description: Создает новый шаблон доступности для преподавателя
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/AvailabilityTemplateRequest'
-#             example:
-#               teacher_id: "teacher-123"
-#               recurrence:
-#                 days:
-#                   - monday
-#                   - wednesday
-#                   - friday
-#                 start_time: "09:00"
-#                 end_time: "18:00"
-#               slot_duration_minutes: 60
-#               start_date: "2024-01-01"
-#               end_date: "2024-12-31"
-#               enabled: true
-#       responses:
-#         '201':
-#           description: Шаблон успешно создан
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   template:
-#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
-#               example:
-#                 template:
-#                   id: "template-123"
-#                   teacher_id: "teacher-123"
-#                   recurrence:
-#                     days:
-#                       - monday
-#                       - wednesday
-#                       - friday
-#                     start_time: "09:00"
-#                     end_time: "18:00"
-#                   slot_duration_minutes: 60
-#                   start_date: "2024-01-01"
-#                   end_date: "2024-12-31"
-#                   enabled: true
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Ресурс не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /availability_templates/{id}:
+    get:
+      tags:
+        - Availability Templates
+      summary: Получить шаблон доступности
+      description: Возвращает информацию о шаблоне доступности по идентификатору
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Шаблон найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template:
+                    $ref: '#/components/schemas/AvailabilityTemplateResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Шаблон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get availability template
+    put:
+      tags:
+        - Availability Templates
+      summary: Обновить шаблон доступности
+      description: Обновляет существующий шаблон доступности
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityTemplateRequest'
+      responses:
+        '200':
+          description: Шаблон успешно обновлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template:
+                    $ref: '#/components/schemas/AvailabilityTemplateResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Шаблон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get availability template
+    delete:
+      tags:
+        - Availability Templates
+      summary: Удалить шаблон доступности
+      description: Удаляет шаблон доступности
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Шаблон успешно удален
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Шаблон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get availability template
 
-#   /availability_templates/{id}:
-#     get:
-#       tags:
-#         - Availability Templates
-#       summary: Получить шаблон доступности
-#       description: Возвращает информацию о шаблоне доступности по идентификатору
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '200':
-#           description: Шаблон найден
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   template:
-#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Шаблон не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#     put:
-#       tags:
-#         - Availability Templates
-#       summary: Обновить шаблон доступности
-#       description: Обновляет существующий шаблон доступности
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/AvailabilityTemplateRequest'
-#       responses:
-#         '200':
-#           description: Шаблон успешно обновлен
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   template:
-#                     $ref: '#/components/schemas/AvailabilityTemplateResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Шаблон не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#     delete:
-#       tags:
-#         - Availability Templates
-#       summary: Удалить шаблон доступности
-#       description: Удаляет шаблон доступности
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '204':
-#           description: Шаблон успешно удален
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Шаблон не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /time_blocks:
+    post:
+      tags:
+        - Time Blocks
+      summary: Создать блок времени
+      description: Создает новый блок времени (отпуск, больничный и т.д.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeBlockRequest'
+            example:
+              teacher_id: "teacher-123"
+              start: "2024-01-15T00:00:00Z"
+              end: "2024-01-20T23:59:59Z"
+              reason: "Отпуск"
+              type: "vacation"
+      responses:
+        '201':
+          description: Блок времени успешно создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_block:
+                    $ref: '#/components/schemas/TimeBlockResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: failed to decode request
+        '404':
+          description: Ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to create availability template
 
-#   /time_blocks:
-#     post:
-#       tags:
-#         - Time Blocks
-#       summary: Создать блок времени
-#       description: Создает новый блок времени (отпуск, больничный и т.д.)
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/TimeBlockRequest'
-#             example:
-#               teacher_id: "teacher-123"
-#               start: "2024-01-15T00:00:00Z"
-#               end: "2024-01-20T23:59:59Z"
-#               reason: "Отпуск"
-#               type: "vacation"
-#       responses:
-#         '201':
-#           description: Блок времени успешно создан
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   time_block:
-#                     $ref: '#/components/schemas/TimeBlockResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Ресурс не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /time_blocks/{id}:
+    get:
+      tags:
+        - Time Blocks
+      summary: Получить блок времени
+      description: Возвращает информацию о блоке времени по идентификатору
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Блок времени найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_block:
+                    $ref: '#/components/schemas/TimeBlockResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Блок времени не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get time block
+    put:
+      tags:
+        - Time Blocks
+      summary: Обновить блок времени
+      description: Обновляет существующий блок времени
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeBlockRequest'
+      responses:
+        '200':
+          description: Блок времени успешно обновлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_block:
+                    $ref: '#/components/schemas/TimeBlockResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: failed to decode request
+        '404':
+          description: Блок времени не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to update time block
+    delete:
+      tags:
+        - Time Blocks
+      summary: Удалить блок времени
+      description: Удаляет блок времени
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Блок времени успешно удален
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Блок времени не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to delete time block
 
-#   /time_blocks/{id}:
-#     get:
-#       tags:
-#         - Time Blocks
-#       summary: Получить блок времени
-#       description: Возвращает информацию о блоке времени по идентификатору
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '200':
-#           description: Блок времени найден
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   time_block:
-#                     $ref: '#/components/schemas/TimeBlockResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Блок времени не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#     put:
-#       tags:
-#         - Time Blocks
-#       summary: Обновить блок времени
-#       description: Обновляет существующий блок времени
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/TimeBlockRequest'
-#       responses:
-#         '200':
-#           description: Блок времени успешно обновлен
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   time_block:
-#                     $ref: '#/components/schemas/TimeBlockResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Блок времени не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#     delete:
-#       tags:
-#         - Time Blocks
-#       summary: Удалить блок времени
-#       description: Удаляет блок времени
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '204':
-#           description: Блок времени успешно удален
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Блок времени не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /slots/{id}:
+    get:
+      tags:
+        - Slots
+      summary: Получить слот
+      description: Возвращает информацию о слоте по идентификатору
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Слот найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slot:
+                    $ref: '#/components/schemas/SlotResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Слот не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get slot
 
-#   /time_blocks:
-#     get:
-#       tags:
-#         - Time Blocks
-#       summary: Список блоков времени
-#       description: Возвращает список блоков времени с возможностью фильтрации
-#       parameters:
-#         - $ref: '#/components/parameters/TeacherIdQuery'
-#         - $ref: '#/components/parameters/FromQuery'
-#         - $ref: '#/components/parameters/ToQuery'
-#       responses:
-#         '200':
-#           description: Список блоков времени
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   time_blocks:
-#                     type: array
-#                     items:
-#                       $ref: '#/components/schemas/TimeBlockResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
 
-#   /slots/{id}:
-#     get:
-#       tags:
-#         - Slots
-#       summary: Получить слот
-#       description: Возвращает информацию о слоте по идентификатору
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '200':
-#           description: Слот найден
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   slot:
-#                     $ref: '#/components/schemas/SlotResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Слот не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /slots/batch:
+    get:
+      tags:
+        - Slots
+      summary: Получить слоты по идентификаторам
+      description: Возвращает список слотов по переданным идентификаторам
+      parameters:
+        - $ref: '#/components/parameters/IdsQuery'
+      responses:
+        '200':
+          description: Список слотов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SlotResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get slots
 
-#   /slots:
-#     get:
-#       tags:
-#         - Slots
-#       summary: Список слотов
-#       description: Возвращает список слотов с возможностью фильтрации и пагинации
-#       parameters:
-#         - $ref: '#/components/parameters/TeacherIdQuery'
-#         - name: from
-#           in: query
-#           required: false
-#           schema:
-#             type: string
-#             format: date
-#           description: Начало периода (YYYY-MM-DD или RFC3339)
-#         - name: to
-#           in: query
-#           required: false
-#           schema:
-#             type: string
-#             format: date
-#           description: Конец периода (YYYY-MM-DD или RFC3339)
-#         - $ref: '#/components/parameters/DurationQuery'
-#         - $ref: '#/components/parameters/StatusQuery'
-#         - $ref: '#/components/parameters/QQuery'
-#         - $ref: '#/components/parameters/PageQuery'
-#         - $ref: '#/components/parameters/PerPageQuery'
-#         - $ref: '#/components/parameters/SortQuery'
-#       responses:
-#         '200':
-#           description: Список слотов
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   slots:
-#                     type: array
-#                     items:
-#                       $ref: '#/components/schemas/SlotResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /slots/generate:
+    post:
+      tags:
+        - Slots
+      summary: Генерировать слоты
+      description: Запускает асинхронную генерацию слотов на основе шаблонов доступности
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlotGenerateRequest'
+            example:
+              template_id: "template-123"
+              from: "2024-01-01"
+              to: "2024-01-31"
+      responses:
+        '202':
+          description: Генерация слотов запущена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotGenerateResponse'
+              example:
+                job_id: "job-123"
+        '400':
+          description: Неверный запрос (требуется template_id или teacher_id)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: template_id or teacher_id is required
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to generate slots
 
-#   /slots/batch:
-#     get:
-#       tags:
-#         - Slots
-#       summary: Получить слоты по идентификаторам
-#       description: Возвращает список слотов по переданным идентификаторам
-#       parameters:
-#         - $ref: '#/components/parameters/IdsQuery'
-#       responses:
-#         '200':
-#           description: Список слотов
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   slots:
-#                     type: array
-#                     items:
-#                       $ref: '#/components/schemas/SlotResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /bookings:
+    post:
+      tags:
+        - Bookings
+      summary: Создать бронирование
+      description: Создает новое бронирование слота для студента. Поддерживает идемпотентность через заголовок Idempotency-Key
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+            example:
+              slot_id: "slot-123"
+              student_id: "student-456"
+      responses:
+        '201':
+          description: Бронирование успешно создано
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: slot_id is required
+        '404':
+          description: Ресурс не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '409':
+          description: Слот недоступен для бронирования
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: SLOT_NOT_AVAILABLE
+                  message: slot is not available
+        '423':
+          description: Ресурс заблокирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: LOCKED
+                  message: resource is locked
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to create booking
 
-#   /slots/generate:
-#     post:
-#       tags:
-#         - Slots
-#       summary: Генерировать слоты
-#       description: Запускает асинхронную генерацию слотов на основе шаблонов доступности
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/SlotGenerateRequest'
-#             example:
-#               template_id: "template-123"
-#               from: "2024-01-01"
-#               to: "2024-01-31"
-#       responses:
-#         '202':
-#           description: Генерация слотов запущена
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/SlotGenerateResponse'
-#               example:
-#                 job_id: "job-123"
-#         '400':
-#           description: Неверный запрос (требуется template_id или teacher_id)
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /bookings/{id}:
+    get:
+      tags:
+        - Bookings
+      summary: Получить бронирование
+      description: Возвращает информацию о бронировании по идентификатору
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Бронирование найдено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get booking
+    delete:
+      tags:
+        - Bookings
+      summary: Удалить бронирование
+      description: Удаляет бронирование
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Бронирование успешно удалено
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to delete booking
 
-#   /bookings:
-#     post:
-#       tags:
-#         - Bookings
-#       summary: Создать бронирование
-#       description: Создает новое бронирование слота для студента. Поддерживает идемпотентность через заголовок Idempotency-Key
-#       parameters:
-#         - $ref: '#/components/headers/IdempotencyKey'
-#       requestBody:
-#         required: true
-#         content:
-#           application/json:
-#             schema:
-#               $ref: '#/components/schemas/BookingRequest'
-#             example:
-#               slot_id: "slot-123"
-#               student_id: "student-456"
-#       responses:
-#         '201':
-#           description: Бронирование успешно создано
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   booking:
-#                     $ref: '#/components/schemas/BookingResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Ресурс не найден
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '409':
-#           description: Слот недоступен для бронирования
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#               example:
-#                 error:
-#                   code: SLOT_NOT_AVAILABLE
-#                   message: slot is not available
-#         '423':
-#           description: Ресурс заблокирован
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#               example:
-#                 error:
-#                   code: LOCKED
-#                   message: resource is locked
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /bookings/{id}/cancel:
+    put:
+      tags:
+        - Bookings
+      summary: Отменить бронирование
+      description: Отменяет существующее бронирование
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Бронирование успешно отменено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to cancel booking
 
-#   /bookings/{id}:
-#     get:
-#       tags:
-#         - Bookings
-#       summary: Получить бронирование
-#       description: Возвращает информацию о бронировании по идентификатору
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '200':
-#           description: Бронирование найдено
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   booking:
-#                     $ref: '#/components/schemas/BookingResponse'
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Бронирование не найдено
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#     delete:
-#       tags:
-#         - Bookings
-#       summary: Удалить бронирование
-#       description: Удаляет бронирование
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '204':
-#           description: Бронирование успешно удалено
-#         '400':
-#           description: Неверный запрос
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '404':
-#           description: Бронирование не найдено
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /bookings/reschedule:
+    post:
+      tags:
+        - Bookings
+      summary: Перенести бронирование
+      description: Переносит существующее бронирование на другой слот
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRescheduleRequest'
+            example:
+              booking_id: "107e3a10-2bfa-4a34-a4ed-68e12ee66374"
+              new_slot_id: "slot-456"
+      responses:
+        '200':
+          description: Бронирование успешно перенесено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Бронирование или слот не найдены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Новый слот недоступен для бронирования
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: SLOT_NOT_AVAILABLE
+                  message: slot is not available
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-#   /bookings:
-#     get:
-#       tags:
-#         - Bookings
-#       summary: Список бронирований
-#       description: Возвращает список бронирований с возможностью фильтрации
-#       parameters:
-#         - $ref: '#/components/parameters/StudentIdQuery'
-#         - $ref: '#/components/parameters/TeacherIdQuery'
-#         - $ref: '#/components/parameters/FromQuery'
-#         - $ref: '#/components/parameters/ToQuery'
-#         - $ref: '#/components/parameters/StatusQuery'
-#       responses:
-#         '200':
-#           description: Список бронирований
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-#                   bookings:
-#                     type: array
-#                     items:
-#                       $ref: '#/components/schemas/BookingResponse'
-#         '500':
-#           description: Внутренняя ошибка сервера
-#           content:
-#             application/json:
-#               schema:
-#                 $ref: '#/components/schemas/ErrorResponse'
+  /bookings/{id}/confirm:
+    post:
+      tags:
+        - Bookings
+      summary: Подтвердить бронирование
+      description: Подтверждает существующее бронирование (меняет статус с pending на confirmed)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Бронирование успешно подтверждено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to confirm booking
 
-#   /bookings/{id}/cancel:
-#     put:
-#       tags:
-#         - Bookings
-#       summary: Отменить бронирование
-#       description: Отменяет существующее бронирование
-#       parameters:
-#         - $ref: '#/components/parameters/IdPath'
-#       responses:
-#         '200':
-#           description: Бронирование успешно отменено
-#           content:
-#             application/json:
-#               schema:
-#                 type: object
-#                 properties:
-            
+  /attendance:
+    post:
+      tags:
+        - Attendance
+      summary: Создать запись посещаемости
+      description: Создает новую запись о посещаемости занятия
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceRequest'
+            example:
+              booking_id: "107e3a10-2bfa-4a34-a4ed-68e12ee66374"
+              status: "present"
+              notes: "Студент присутствовал на занятии"
+      responses:
+        '201':
+          description: Запись посещаемости успешно создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendance:
+                    $ref: '#/components/schemas/AttendanceResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: booking_id is required
+        '404':
+          description: Бронирование не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to create attendance
+    get:
+      tags:
+        - Attendance
+      summary: Список записей посещаемости
+      description: Возвращает список записей посещаемости с возможностью фильтрации
+      parameters:
+        - $ref: '#/components/parameters/TeacherIdQuery'
+        - $ref: '#/components/parameters/FromQuery'
+        - $ref: '#/components/parameters/ToQuery'
+      responses:
+        '200':
+          description: Список записей посещаемости
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendances:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AttendanceResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to list attendance
+
+  /attendance/{id}:
+    get:
+      tags:
+        - Attendance
+      summary: Получить запись посещаемости
+      description: Возвращает информацию о записи посещаемости по идентификатору
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Запись посещаемости найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendance:
+                    $ref: '#/components/schemas/AttendanceResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FAILED_TO_DECODE
+                  message: id is required
+        '404':
+          description: Запись посещаемости не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: resource not found
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: REQUEST_FAILED
+                  message: failed to get attendance

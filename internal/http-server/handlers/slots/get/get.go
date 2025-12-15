@@ -121,20 +121,35 @@ func New(log *slog.Logger, getter SlotGetter) http.HandlerFunc {
 			filters.Q = &q
 		}
 
+		// Дефолтные значения для пагинации
+		defaultPage := 1
+		defaultPerPage := 20
+		defaultSort := "starts_at"
+
 		if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-			if page, err := strconv.Atoi(pageStr); err == nil {
+			if page, err := strconv.Atoi(pageStr); err == nil && page > 0 {
 				filters.Page = &page
+			} else {
+				filters.Page = &defaultPage
 			}
+		} else {
+			filters.Page = &defaultPage
 		}
 
 		if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
-			if perPage, err := strconv.Atoi(perPageStr); err == nil {
+			if perPage, err := strconv.Atoi(perPageStr); err == nil && perPage > 0 && perPage <= 100 {
 				filters.PerPage = &perPage
+			} else {
+				filters.PerPage = &defaultPerPage
 			}
+		} else {
+			filters.PerPage = &defaultPerPage
 		}
 
 		if sort := r.URL.Query().Get("sort"); sort != "" {
 			filters.Sort = &sort
+		} else {
+			filters.Sort = &defaultSort
 		}
 
 		slots, err := getter.ListSlots(r.Context(), filters)

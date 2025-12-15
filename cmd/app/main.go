@@ -105,7 +105,7 @@ func main() {
 	// Slots
 	// router.Get("/slots", slotGet.New(log, service))
 	router.Get("/slots/{id}", slotGet.New(log, service))
-	// router.Get("/slots/batch", slotGet.New(log, service))
+	router.Get("/slots/batch", slotGet.New(log, service))
 	router.Post("/slots/generate", slotGenerate.New(log, service))
 
 	// Bookings
